@@ -27,7 +27,7 @@ data class AppSettings(
     val onboardingCompleted: Boolean = false,
     val scheduledDateTimeNotificationsEnabled: Boolean = true,
     val scheduledDateDefaultNotificationTime: String = "07:00",
-    val dueDateNotificationsEnabled: Boolean = false,
+    val dueDateNotificationsEnabled: Boolean = true,
     val dueDateDefaultNotificationTime: String = "07:00",
     val staleTaskUpdateNotificationsEnabled: Boolean = true,
     val lastStaleTaskUpdateNotificationAt: Long = 0L

@@ -60,7 +60,7 @@ class SettingsRepository(private val context: Context) {
                     preferences[Keys.SCHEDULED_DATETIME_NOTIFICATIONS_ENABLED] ?: true,
                 scheduledDateDefaultNotificationTime =
                     preferences[Keys.SCHEDULED_DATE_DEFAULT_NOTIFICATION_TIME] ?: "07:00",
-                dueDateNotificationsEnabled = preferences[Keys.DUE_DATE_NOTIFICATIONS_ENABLED] ?: false,
+                dueDateNotificationsEnabled = preferences[Keys.DUE_DATE_NOTIFICATIONS_ENABLED] ?: true,
                 dueDateDefaultNotificationTime = preferences[Keys.DUE_DATE_DEFAULT_NOTIFICATION_TIME] ?: "07:00",
                 staleTaskUpdateNotificationsEnabled =
                     preferences[Keys.STALE_TASK_UPDATE_NOTIFICATIONS_ENABLED] ?: true,

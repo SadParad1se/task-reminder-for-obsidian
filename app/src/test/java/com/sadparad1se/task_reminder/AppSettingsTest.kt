@@ -1,6 +1,7 @@
 package com.sadparad1se.task_reminder
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AppSettingsTest {
@@ -19,5 +20,11 @@ class AppSettingsTest {
     fun scanFrequencyDefaultsToHourly() {
         assertEquals(ScanFrequency.EVERY_HOUR, ScanFrequency.fromStorageValue(null))
         assertEquals(ScanFrequency.EVERY_HOUR, ScanFrequency.fromStorageValue("unsupported"))
+    }
+
+    /** Verifies due date reminders are enabled for fresh settings. */
+    @Test
+    fun dueDateNotificationsDefaultToEnabled() {
+        assertTrue(AppSettings().dueDateNotificationsEnabled)
     }
 }
