@@ -1,5 +1,8 @@
 package com.sadparad1se.task_reminder
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,12 +11,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
@@ -22,14 +28,17 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
@@ -57,9 +66,28 @@ fun HomeScreen(
     }
 
     Scaffold(
+        modifier = Modifier.background(appBackgroundBrush()),
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
-                title = { Text("Task Reminder") },
+                title = {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Image(
+                            painter = painterResource(id = R.mipmap.ic_launcher),
+                            contentDescription = null,
+                            modifier = Modifier.size(28.dp)
+                        )
+                        AppTitle()
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.94f),
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.primary
+                ),
                 actions = {
                     TextButton(onClick = onOpenSettings) {
                         Text("Settings")
@@ -72,7 +100,9 @@ fun HomeScreen(
                 FloatingActionButton(
                     onClick = {
                         scope.launch { listState.animateScrollToItem(0) }
-                    }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                 ) {
                     Text("↑")
                 }
@@ -116,6 +146,23 @@ fun HomeScreen(
             }
         }
     }
+}
+
+/** Displays the app name with a logo-inspired color sweep. */
+@Composable
+private fun AppTitle() {
+    Text(
+        text = "Task Reminder",
+        style = MaterialTheme.typography.titleLarge.copy(
+            brush = Brush.horizontalGradient(
+                colors = listOf(
+                    MaterialTheme.colorScheme.primary,
+                    MaterialTheme.colorScheme.secondary,
+                    MaterialTheme.colorScheme.tertiary
+                )
+            )
+        )
+    )
 }
 
 /** Displays priority and time bucket toggles above the task cards. */
@@ -171,22 +218,37 @@ private fun FilterButton(
     modifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
-    val enabledColor = activeColor ?: MaterialTheme.colorScheme.onSurface
+    val enabledColor = activeColor ?: MaterialTheme.colorScheme.primary
+    val contentColor = if (active) {
+        MaterialTheme.colorScheme.onSurface
+    } else {
+        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
+    }
+    val containerColor = if (active) {
+        enabledColor.copy(alpha = 0.16f)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)
+    }
     val colors = if (active) {
         ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = enabledColor
+            containerColor = containerColor,
+            contentColor = contentColor
         )
     } else {
         ButtonDefaults.buttonColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
-            contentColor = enabledColor.copy(alpha = 0.38f)
+            containerColor = containerColor,
+            contentColor = contentColor
         )
     }
     Button(
         onClick = onClick,
         modifier = modifier,
         colors = colors,
+        shape = RoundedCornerShape(percent = 50),
+        border = BorderStroke(
+            width = 1.dp,
+            color = enabledColor.copy(alpha = if (active) 0.76f else 0.28f)
+        ),
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
     ) {
         Text(
@@ -212,10 +274,19 @@ private fun TaskRow(
     task: TaskListItem,
     onClick: () -> Unit
 ) {
+    val accentColor = parseTaskNotesColor(task.priorityColor)
+        ?: parseTaskNotesColor(task.statusColor)
+        ?: MaterialTheme.colorScheme.primary
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick)
+            .clickable(onClick = onClick),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.34f))
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -275,11 +346,12 @@ private fun TaskMetadataChip(
     label: String,
     hexColor: String?
 ) {
-    val backgroundColor = parseTaskNotesColor(hexColor) ?: MaterialTheme.colorScheme.surfaceVariant
+    val backgroundColor = parseTaskNotesColor(hexColor) ?: MaterialTheme.colorScheme.primary
     Surface(
-        color = backgroundColor,
-        contentColor = readableContentColor(backgroundColor),
-        shape = MaterialTheme.shapes.small
+        color = backgroundColor.copy(alpha = 0.18f),
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        shape = RoundedCornerShape(percent = 50),
+        border = BorderStroke(1.dp, backgroundColor.copy(alpha = 0.72f))
     ) {
         Text(
             text = label,
@@ -301,7 +373,14 @@ private fun parseTaskNotesColor(hexColor: String?): Color? {
     return Color(argb.toULong(16).toLong().toInt())
 }
 
-/** Chooses black or white text based on the chip background brightness. */
-private fun readableContentColor(backgroundColor: Color): Color {
-    return if (backgroundColor.luminance() > 0.5f) Color.Black else Color.White
+/** Creates the logo-inspired app backdrop used behind list content. */
+@Composable
+private fun appBackgroundBrush(): Brush {
+    return Brush.verticalGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.background,
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.86f),
+            MaterialTheme.colorScheme.background
+        )
+    )
 }
