@@ -52,7 +52,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.LocalTime
 import kotlin.math.roundToInt
@@ -64,17 +63,14 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val settingsRepository = remember { SettingsRepository(context.applicationContext) }
     val taskRepository = remember { TaskRepository(context.applicationContext) }
-    val settings by remember(settingsRepository) {
-        settingsRepository.settingsFlow.map<AppSettings, AppSettings?> { it }
-    }.collectAsStateWithLifecycle(initialValue = null)
+    val settings by settingsRepository.settingsFlow.collectAsStateWithLifecycle(initialValue = AppSettings())
     val scanStates by taskRepository.vaultScanStatesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val scope = rememberCoroutineScope()
     var canScheduleExactAlarms by remember { mutableStateOf(taskRepository.canScheduleExactAlarms()) }
     var hasNotificationPermission by remember { mutableStateOf(taskRepository.hasNotificationPermission()) }
 
-    val loadedSettings = settings ?: return
-    val selectedVaults = remember(loadedSettings.vaultUris) {
-        loadedSettings.vaultUris.map { vaultUri ->
+    val selectedVaults = remember(settings.vaultUris) {
+        settings.vaultUris.map { vaultUri ->
             val uri = Uri.parse(vaultUri)
             VaultSelection(
                 uri = uri,
@@ -86,7 +82,7 @@ fun SettingsScreen() {
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val uri = result.data?.data
-        if (result.resultCode == Activity.RESULT_OK && uri != null && loadedSettings.vaultUris.none { it == uri.toString() }) {
+        if (result.resultCode == Activity.RESULT_OK && uri != null && settings.vaultUris.none { it == uri.toString() }) {
             if (!isObsidianVault(context, uri)) {
                 Toast.makeText(
                     context,
@@ -126,7 +122,7 @@ fun SettingsScreen() {
     }
 
     SettingsScreenContent(
-        settings = loadedSettings,
+        settings = settings,
         selectedVaults = selectedVaults,
         scanStates = scanStates,
         canScheduleExactAlarms = canScheduleExactAlarms,
@@ -138,7 +134,7 @@ fun SettingsScreen() {
                 settingsRepository.removeVaultUri(vaultUri)
             }
         },
-        onScanNow = { scope.launch { taskRepository.scanVaults(loadedSettings.vaultUris) } },
+        onScanNow = { scope.launch { taskRepository.scanVaults(settings.vaultUris) } },
         onScanFrequencySelected = { frequency ->
             scope.launch { settingsRepository.updateScanFrequency(frequency) }
         },

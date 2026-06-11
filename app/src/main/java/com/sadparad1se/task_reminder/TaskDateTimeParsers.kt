@@ -17,29 +17,26 @@ fun parseNotificationTime(time: String): LocalTime {
 
 /** Parses TaskNotes date or date-time values into epoch milliseconds when possible. */
 fun String.toTaskNotesEpochMillisOrNull(zone: ZoneId = ZoneId.systemDefault()): Long? {
-    toTaskNotesDateTimeEpochMillisOrNull(zone)?.let { return it }
-    runCatching {
-        return LocalDate.parse(this, DateTimeFormatter.ISO_LOCAL_DATE)
-            .atStartOfDay(zone)
-            .toInstant()
-            .toEpochMilli()
-    }
-    return null
+    return toTaskNotesDateTimeEpochMillisOrNull(zone)
+        ?: runCatching {
+            LocalDate.parse(this, DateTimeFormatter.ISO_LOCAL_DATE)
+                .atStartOfDay(zone)
+                .toInstant()
+                .toEpochMilli()
+        }.getOrNull()
 }
 
 /** Parses TaskNotes local or offset date-time values into epoch milliseconds when possible. */
 fun String.toTaskNotesDateTimeEpochMillisOrNull(zone: ZoneId = ZoneId.systemDefault()): Long? {
-    runCatching {
-        return OffsetDateTime.parse(this, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+    return runCatching {
+        OffsetDateTime.parse(this, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
             .atZoneSameInstant(zone)
             .toInstant()
             .toEpochMilli()
-    }
-    runCatching {
-        return LocalDateTime.parse(this, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
+    }.getOrNull() ?: runCatching {
+        LocalDateTime.parse(this, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
             .atZone(zone)
             .toInstant()
             .toEpochMilli()
-    }
-    return null
+    }.getOrNull()
 }

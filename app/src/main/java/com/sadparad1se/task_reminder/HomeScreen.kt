@@ -229,21 +229,13 @@ private fun FilterButton(
     } else {
         MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)
     }
-    val colors = if (active) {
-        ButtonDefaults.buttonColors(
-            containerColor = containerColor,
-            contentColor = contentColor
-        )
-    } else {
-        ButtonDefaults.buttonColors(
-            containerColor = containerColor,
-            contentColor = contentColor
-        )
-    }
     Button(
         onClick = onClick,
         modifier = modifier,
-        colors = colors,
+        colors = ButtonDefaults.buttonColors(
+            containerColor = containerColor,
+            contentColor = contentColor
+        ),
         shape = RoundedCornerShape(percent = 50),
         border = BorderStroke(
             width = 1.dp,

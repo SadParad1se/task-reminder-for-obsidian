@@ -39,9 +39,10 @@ class TaskNotificationScheduler(
     /** Rebuilds alarms for all stored tasks. */
     suspend fun rescheduleAll() {
         val settings = settingsRepository.settingsFlow.first()
+        val canScheduleNotifications = canScheduleExactAlarms() && hasNotificationPermission()
         taskDao.getAllTasks().forEach { task ->
             cancelTaskNotifications(task.id)
-            if (canScheduleExactAlarms() && hasNotificationPermission()) {
+            if (canScheduleNotifications) {
                 schedule(task, settings)
             }
         }
@@ -56,20 +57,21 @@ class TaskNotificationScheduler(
 
     /** Schedules all enabled exact reminder alarms for a task. */
     private fun schedule(task: StoredTask, settings: AppSettings) {
-        scheduleScheduledReminder(task, settings)
-        scheduleDueReminder(task, settings)
+        val now = System.currentTimeMillis()
+        scheduleScheduledReminder(task, settings, now)
+        scheduleDueReminder(task, settings, now)
     }
 
     /** Schedules the TaskNotes scheduled reminder when the setting and value allow it. */
-    private fun scheduleScheduledReminder(task: StoredTask, settings: AppSettings) {
-        val triggerAtMillis = calculateScheduledTriggerAtMillis(task.scheduled, settings) ?: return
+    private fun scheduleScheduledReminder(task: StoredTask, settings: AppSettings, now: Long) {
+        val triggerAtMillis = calculateScheduledTriggerAtMillis(task.scheduled, settings, now) ?: return
         scheduleAlarm(task.id, TaskReminderType.SCHEDULED, triggerAtMillis)
     }
 
     /** Schedules the due date reminder when enabled and the task has a future due date. */
-    private fun scheduleDueReminder(task: StoredTask, settings: AppSettings) {
+    private fun scheduleDueReminder(task: StoredTask, settings: AppSettings, now: Long) {
         if (!settings.dueDateNotificationsEnabled) return
-        val triggerAtMillis = calculateDueTriggerAtMillis(task.due, settings) ?: return
+        val triggerAtMillis = calculateDueTriggerAtMillis(task.due, settings, now) ?: return
         scheduleAlarm(task.id, TaskReminderType.DUE, triggerAtMillis)
     }
 
@@ -88,32 +90,34 @@ class TaskNotificationScheduler(
     }
 
     /** Converts a scheduled TaskNotes value to a future trigger time. */
-    private fun calculateScheduledTriggerAtMillis(scheduled: String?, settings: AppSettings): Long? {
+    private fun calculateScheduledTriggerAtMillis(scheduled: String?, settings: AppSettings, now: Long): Long? {
         if (scheduled.isNullOrBlank()) return null
         val triggerAt = scheduled.toTaskNotesDateTimeEpochMillisOrNull()
             ?.takeIf { settings.scheduledDateTimeNotificationsEnabled }
             ?: calculateDateTriggerAtMillis(
                 date = scheduled,
-                time = settings.scheduledDateDefaultNotificationTime
+                time = settings.scheduledDateDefaultNotificationTime,
+                now = now
             )
             ?: return null
-        return triggerAt.takeIf { it > System.currentTimeMillis() }
+        return triggerAt.takeIf { it > now }
     }
 
     /** Converts a due TaskNotes value to a future trigger time. */
-    private fun calculateDueTriggerAtMillis(due: String?, settings: AppSettings): Long? {
+    private fun calculateDueTriggerAtMillis(due: String?, settings: AppSettings, now: Long): Long? {
         if (due.isNullOrBlank()) return null
         val triggerAt = due.toTaskNotesDateTimeEpochMillisOrNull()
             ?: calculateDateTriggerAtMillis(
                 date = due,
-                time = settings.dueDateDefaultNotificationTime
+                time = settings.dueDateDefaultNotificationTime,
+                now = now
             )
             ?: return null
-        return triggerAt.takeIf { it > System.currentTimeMillis() }
+        return triggerAt.takeIf { it > now }
     }
 
     /** Combines an ISO date with a user-selected notification time. */
-    private fun calculateDateTriggerAtMillis(date: String?, time: String): Long? {
+    private fun calculateDateTriggerAtMillis(date: String?, time: String, now: Long): Long? {
         if (date.isNullOrBlank()) return null
         val triggerAt = runCatching {
             LocalDateTime.of(
@@ -123,7 +127,7 @@ class TaskNotificationScheduler(
                 .toInstant()
                 .toEpochMilli()
         }.getOrNull() ?: return null
-        return triggerAt.takeIf { it > System.currentTimeMillis() }
+        return triggerAt.takeIf { it > now }
     }
 
     /** Builds the broadcast pending intent used by AlarmManager. */
