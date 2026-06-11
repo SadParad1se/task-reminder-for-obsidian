@@ -282,48 +282,38 @@ private fun TaskRow(
         ) {
             Text(
                 text = task.title,
-                style = MaterialTheme.typography.titleSmall
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
             )
             task.scheduled?.let { scheduled ->
                 Text(
-                    text = "Scheduled: $scheduled",
+                    text = "📅 $scheduled",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
             task.due?.let { due ->
                 Text(
-                    text = "Due: $due",
+                    text = "🏁 $due",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
-            if (task.status != null || task.priority != null) {
+            if (task.tags.isNotEmpty() || task.status != null) {
                 Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    task.status?.let { status ->
+                    if (task.tags.isNotEmpty()) {
                         TaskMetadataChip(
-                            label = "Status: $status",
-                            hexColor = task.statusColor
+                            label = task.tags.joinToString(", "),
+                            hexColor = null
                         )
                     }
-                    task.priority?.let { priority ->
+                    task.status?.let { status ->
                         TaskMetadataChip(
-                            label = "Priority: $priority",
-                            hexColor = task.priorityColor
+                            label = status,
+                            hexColor = task.statusColor
                         )
                     }
                 }
             }
-            if (task.tags.isNotEmpty()) {
-                Text(
-                    text = "Tags: ${task.tags.joinToString(", ")}",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            Text(
-                text = task.excerpt,
-                style = MaterialTheme.typography.bodySmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
         }
     }
 }
