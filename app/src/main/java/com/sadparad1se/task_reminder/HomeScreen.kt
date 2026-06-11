@@ -6,6 +6,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -43,6 +44,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.OffsetDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
 
 /** Displays the task list and top-level navigation actions. */
 @Composable
@@ -229,7 +236,7 @@ private fun FilterButton(
         onClick = onClick,
         modifier = modifier,
         colors = ButtonDefaults.buttonColors(
-            containerColor = borderOnlyContainerColor(),
+            containerColor = filterButtonContainerColor(enabledColor, active),
             contentColor = contentColor
         ),
         shape = RoundedCornerShape(percent = 50),
@@ -244,6 +251,21 @@ private fun FilterButton(
             style = MaterialTheme.typography.labelSmall
         )
     }
+}
+
+/** Returns a muted color fill for filters while preserving contrast in both themes. */
+@Composable
+private fun filterButtonContainerColor(
+    color: Color,
+    active: Boolean
+): Color {
+    val alpha = when {
+        active && isSystemInDarkTheme() -> 0.24f
+        active -> 0.14f
+        isSystemInDarkTheme() -> 0.10f
+        else -> 0.06f
+    }
+    return color.copy(alpha = alpha)
 }
 
 /** Returns the fixed filter color for a time bucket button. */
@@ -265,57 +287,112 @@ private fun TaskRow(
     val accentColor = parseTaskNotesColor(task.priorityColor)
         ?: parseTaskNotesColor(task.statusColor)
         ?: MaterialTheme.colorScheme.primary
-    Card(
+    val priorityBorderColor = parseTaskNotesColor(task.priorityColor) ?: accentColor
+    val timeBucketBorderColor = task.timeBucket().filterColor()
+    val cardShape = RoundedCornerShape(22.dp)
+    Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(22.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = borderOnlyContainerColor(),
-            contentColor = MaterialTheme.colorScheme.onSurface
-        ),
-        border = BorderStroke(3.dp, accentColor.copy(alpha = 0.72f))
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
-        ) {
-            Text(
-                text = task.title,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+            .background(
+                brush = Brush.horizontalGradient(
+                    colors = listOf(
+                        priorityBorderColor.copy(alpha = 0.72f),
+                        timeBucketBorderColor.copy(alpha = 0.72f)
+                    )
+                ),
+                shape = cardShape
             )
-            task.scheduled?.let { scheduled ->
+            .clickable(onClick = onClick)
+            .padding(3.dp)
+    ) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = cardShape,
+            colors = CardDefaults.cardColors(
+                containerColor = borderOnlyContainerColor(),
+                contentColor = MaterialTheme.colorScheme.onSurface
+            )
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
+            ) {
                 Text(
-                    text = "📅 $scheduled",
-                    style = MaterialTheme.typography.bodySmall
+                    text = task.title,
+                    style = MaterialTheme.typography.titleSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-            }
-            task.due?.let { due ->
-                Text(
-                    text = "🏁 $due",
-                    style = MaterialTheme.typography.bodySmall
-                )
-            }
-            if (task.tags.isNotEmpty() || task.status != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (task.tags.isNotEmpty()) {
-                        TaskMetadataChip(
-                            label = task.tags.joinToString(", "),
-                            hexColor = null
-                        )
-                    }
-                    task.status?.let { status ->
-                        TaskMetadataChip(
-                            label = status,
-                            hexColor = task.statusColor
-                        )
+                task.scheduled?.let { scheduled ->
+                    Text(
+                        text = "📅 $scheduled",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                task.due?.let { due ->
+                    Text(
+                        text = "🏁 $due",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+                if (task.tags.isNotEmpty() || task.status != null) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        task.status?.let { status ->
+                            TaskMetadataChip(
+                                label = status,
+                                hexColor = task.statusColor
+                            )
+                        }
+                        if (task.tags.isNotEmpty()) {
+                            TaskMetadataChip(
+                                label = task.tags.joinToString(", "),
+                                hexColor = null
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+/** Classifies a task using the same date bucket rules as the task query filters. */
+private fun TaskListItem.timeBucket(now: LocalDateTime = LocalDateTime.now()): TaskTimeBucket {
+    val scheduledDateTime = scheduled?.toTaskNotesLocalDateTimeOrNull()
+    val dueDateTime = due?.toTaskNotesDueDateTimeOrNull()
+
+    return when {
+        scheduledDateTime == null && dueDateTime == null -> TaskTimeBucket.UNDATED
+        scheduledDateTime != null && scheduledDateTime > now -> TaskTimeBucket.UPCOMING
+        dueDateTime != null && dueDateTime < now -> TaskTimeBucket.OVERDUE
+        else -> TaskTimeBucket.CURRENT
+    }
+}
+
+/** Parses TaskNotes scheduled values for local UI bucket classification. */
+private fun String.toTaskNotesLocalDateTimeOrNull(): LocalDateTime? {
+    return runCatching { LocalDateTime.parse(this, DateTimeFormatter.ISO_LOCAL_DATE_TIME) }
+        .getOrNull()
+        ?: runCatching {
+            OffsetDateTime.parse(this, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                .atZoneSameInstant(ZoneId.systemDefault())
+                .toLocalDateTime()
+        }.getOrNull()
+        ?: runCatching { LocalDate.parse(this, DateTimeFormatter.ISO_LOCAL_DATE).atStartOfDay() }
+            .getOrNull()
+}
+
+/** Parses TaskNotes due values, treating date-only due dates as the end of that day. */
+private fun String.toTaskNotesDueDateTimeOrNull(): LocalDateTime? {
+    return runCatching { LocalDateTime.parse(this, DateTimeFormatter.ISO_LOCAL_DATE_TIME) }
+        .getOrNull()
+        ?: runCatching {
+            OffsetDateTime.parse(this, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
+                .atZoneSameInstant(ZoneId.systemDefault())
+                .toLocalDateTime()
+        }.getOrNull()
+        ?: runCatching { LocalDate.parse(this, DateTimeFormatter.ISO_LOCAL_DATE).atTime(LocalTime.MAX) }
+            .getOrNull()
 }
 
 /** Returns a neutral card/button fill that stays readable in light and dark themes. */
