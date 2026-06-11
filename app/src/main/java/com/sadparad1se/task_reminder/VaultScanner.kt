@@ -29,6 +29,8 @@ class VaultScanner(
                 throw IllegalStateException("Selected folder is not an Obsidian vault")
             }
             val loadedSettings = loadTaskNotesSettings(vaultUri, vaultDocument)
+            val tasksFolderDocument = vaultDocument.findDirectoryByRelativePath(loadedSettings.settings.tasksFolder)
+                ?: throw IllegalStateException("TaskNotes tasksFolder cannot be opened")
             val lastScannedAt = if (loadedSettings.forceFullRescan) {
                 taskDao.getTasksByVaultUri(vaultUri)
                     .forEach { task -> notificationScheduler.cancelTaskNotifications(task.id) }
@@ -37,8 +39,6 @@ class VaultScanner(
             } else {
                 vaultScanStateDao.get(vaultUri)?.lastScannedAt ?: 0L
             }
-            val tasksFolderDocument = vaultDocument.findDirectoryByRelativePath(loadedSettings.settings.tasksFolder)
-                ?: throw IllegalStateException("TaskNotes tasksFolder cannot be opened")
 
             val seenFileUris = mutableSetOf<String>()
             scanDocumentTreeEntry(

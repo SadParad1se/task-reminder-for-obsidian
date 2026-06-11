@@ -11,6 +11,8 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -21,8 +23,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -31,6 +35,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -41,11 +46,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.time.LocalTime
 import kotlin.math.roundToInt
@@ -57,17 +63,14 @@ fun SettingsScreen() {
     val context = LocalContext.current
     val settingsRepository = remember { SettingsRepository(context.applicationContext) }
     val taskRepository = remember { TaskRepository(context.applicationContext) }
-    val settings by remember(settingsRepository) {
-        settingsRepository.settingsFlow.map<AppSettings, AppSettings?> { it }
-    }.collectAsStateWithLifecycle(initialValue = null)
+    val settings by settingsRepository.settingsFlow.collectAsStateWithLifecycle(initialValue = AppSettings())
     val scanStates by taskRepository.vaultScanStatesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val scope = rememberCoroutineScope()
     var canScheduleExactAlarms by remember { mutableStateOf(taskRepository.canScheduleExactAlarms()) }
     var hasNotificationPermission by remember { mutableStateOf(taskRepository.hasNotificationPermission()) }
 
-    val loadedSettings = settings ?: return
-    val selectedVaults = remember(loadedSettings.vaultUris) {
-        loadedSettings.vaultUris.map { vaultUri ->
+    val selectedVaults = remember(settings.vaultUris) {
+        settings.vaultUris.map { vaultUri ->
             val uri = Uri.parse(vaultUri)
             VaultSelection(
                 uri = uri,
@@ -79,7 +82,7 @@ fun SettingsScreen() {
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
         val uri = result.data?.data
-        if (result.resultCode == Activity.RESULT_OK && uri != null && loadedSettings.vaultUris.none { it == uri.toString() }) {
+        if (result.resultCode == Activity.RESULT_OK && uri != null && settings.vaultUris.none { it == uri.toString() }) {
             if (!isObsidianVault(context, uri)) {
                 Toast.makeText(
                     context,
@@ -119,7 +122,7 @@ fun SettingsScreen() {
     }
 
     SettingsScreenContent(
-        settings = loadedSettings,
+        settings = settings,
         selectedVaults = selectedVaults,
         scanStates = scanStates,
         canScheduleExactAlarms = canScheduleExactAlarms,
@@ -131,7 +134,7 @@ fun SettingsScreen() {
                 settingsRepository.removeVaultUri(vaultUri)
             }
         },
-        onScanNow = { scope.launch { taskRepository.scanVaults(loadedSettings.vaultUris) } },
+        onScanNow = { scope.launch { taskRepository.scanVaults(settings.vaultUris) } },
         onScanFrequencySelected = { frequency ->
             scope.launch { settingsRepository.updateScanFrequency(frequency) }
         },
@@ -193,8 +196,16 @@ private fun SettingsScreenContent(
     onRequestNotificationPermission: () -> Unit
 ) {
     Scaffold(
+        modifier = Modifier.background(settingsBackgroundBrush()),
+        containerColor = Color.Transparent,
         topBar = {
-            TopAppBar(title = { Text("Settings") })
+            TopAppBar(
+                title = { Text("Settings") },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background.copy(alpha = 0.94f),
+                    titleContentColor = MaterialTheme.colorScheme.onBackground
+                )
+            )
         }
     ) { innerPadding ->
         LazyColumn(
@@ -259,7 +270,15 @@ private fun VaultRow(
     vault: VaultSelection,
     onRemoveVault: (String) -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f),
+            contentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -560,7 +579,8 @@ private fun BatterySettingsButton() {
 private fun SectionTitle(text: String) {
     Text(
         text = text,
-        style = MaterialTheme.typography.titleMedium
+        style = MaterialTheme.typography.titleMedium,
+        color = MaterialTheme.colorScheme.secondary
     )
 }
 
@@ -626,4 +646,16 @@ private fun SettingsScreenPreview() {
             onRequestNotificationPermission = {}
         )
     }
+}
+
+/** Creates the same neon-tinted backdrop used by the rest of the app. */
+@Composable
+private fun settingsBackgroundBrush(): Brush {
+    return Brush.verticalGradient(
+        colors = listOf(
+            MaterialTheme.colorScheme.background,
+            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.84f),
+            MaterialTheme.colorScheme.background
+        )
+    )
 }

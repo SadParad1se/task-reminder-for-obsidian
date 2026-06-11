@@ -8,35 +8,64 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
 private val LightColorScheme = lightColorScheme(
-    primary = androidx.compose.ui.graphics.Color(0xFF3A5A40),
-    onPrimary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
-    secondary = androidx.compose.ui.graphics.Color(0xFF588157),
-    onSecondary = androidx.compose.ui.graphics.Color(0xFFFFFFFF),
-    background = androidx.compose.ui.graphics.Color(0xFFF6FBF6),
-    onBackground = androidx.compose.ui.graphics.Color(0xFF1C1F1C),
-    surface = androidx.compose.ui.graphics.Color(0xFFF6FBF6),
-    onSurface = androidx.compose.ui.graphics.Color(0xFF1C1F1C)
+    primary = Color(0xFF006A91),
+    onPrimary = Color(0xFFFFFFFF),
+    primaryContainer = Color(0xFFD4F2FF),
+    onPrimaryContainer = Color(0xFF001F2E),
+    secondary = Color(0xFF8A16C8),
+    onSecondary = Color(0xFFFFFFFF),
+    secondaryContainer = Color(0xFFF2DAFF),
+    onSecondaryContainer = Color(0xFF2E004A),
+    tertiary = Color(0xFFB000E8),
+    onTertiary = Color(0xFFFFFFFF),
+    tertiaryContainer = Color(0xFFFFD6FA),
+    onTertiaryContainer = Color(0xFF3A0049),
+    background = Color(0xFFF9F7FF),
+    onBackground = Color(0xFF17121F),
+    surface = Color(0xFFFFFBFF),
+    onSurface = Color(0xFF17121F),
+    surfaceVariant = Color(0xFFEDE5F4),
+    onSurfaceVariant = Color(0xFF4C4456),
+    outline = Color(0xFF7E7488),
+    outlineVariant = Color(0xFFCFC3D8),
+    error = Color(0xFFBA1A1A),
+    onError = Color(0xFFFFFFFF)
 )
 
 private val DarkColorScheme = darkColorScheme(
-    primary = androidx.compose.ui.graphics.Color(0xFFA3C9A8),
-    onPrimary = androidx.compose.ui.graphics.Color(0xFF12301D),
-    secondary = androidx.compose.ui.graphics.Color(0xFF8CBF8A),
-    onSecondary = androidx.compose.ui.graphics.Color(0xFF102B16),
-    background = androidx.compose.ui.graphics.Color(0xFF101410),
-    onBackground = androidx.compose.ui.graphics.Color(0xFFE3EAE2),
-    surface = androidx.compose.ui.graphics.Color(0xFF101410),
-    onSurface = androidx.compose.ui.graphics.Color(0xFFE3EAE2)
+    primary = Color(0xFF22C4FF),
+    onPrimary = Color(0xFF001F2E),
+    primaryContainer = Color(0xFF00364B),
+    onPrimaryContainer = Color(0xFFC7EEFF),
+    secondary = Color(0xFFE34CFF),
+    onSecondary = Color(0xFF3B004D),
+    secondaryContainer = Color(0xFF5B0078),
+    onSecondaryContainer = Color(0xFFF9D7FF),
+    tertiary = Color(0xFF9B68FF),
+    onTertiary = Color(0xFF21005D),
+    tertiaryContainer = Color(0xFF3B1A7A),
+    onTertiaryContainer = Color(0xFFE9DDFF),
+    background = Color(0xFF050509),
+    onBackground = Color(0xFFEDE7F7),
+    surface = Color(0xFF0D0B14),
+    onSurface = Color(0xFFEDE7F7),
+    surfaceVariant = Color(0xFF1A1328),
+    onSurfaceVariant = Color(0xFFD5C7E4),
+    outline = Color(0xFF8D7EA0),
+    outlineVariant = Color(0xFF3F334D),
+    error = Color(0xFFFFB4AB),
+    onError = Color(0xFF690005)
 )
 
 /** Applies the app's Material color scheme to Compose content. */
 @Composable
 fun TaskReminderTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
