@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -209,7 +210,7 @@ private fun TaskFilterRows(
     }
 }
 
-/** Displays a clickable filter button that uses colored text for included values. */
+/** Displays a clickable filter button that uses color only on its border. */
 @Composable
 private fun FilterButton(
     label: String,
@@ -224,21 +225,16 @@ private fun FilterButton(
     } else {
         MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f)
     }
-    val containerColor = if (active) {
-        enabledColor.copy(alpha = 0.16f)
-    } else {
-        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f)
-    }
     Button(
         onClick = onClick,
         modifier = modifier,
         colors = ButtonDefaults.buttonColors(
-            containerColor = containerColor,
+            containerColor = borderOnlyContainerColor(),
             contentColor = contentColor
         ),
         shape = RoundedCornerShape(percent = 50),
         border = BorderStroke(
-            width = 1.dp,
+            width = 3.dp,
             color = enabledColor.copy(alpha = if (active) 0.76f else 0.28f)
         ),
         contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
@@ -275,10 +271,10 @@ private fun TaskRow(
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(22.dp),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+            containerColor = borderOnlyContainerColor(),
             contentColor = MaterialTheme.colorScheme.onSurface
         ),
-        border = BorderStroke(1.dp, accentColor.copy(alpha = 0.34f))
+        border = BorderStroke(3.dp, accentColor.copy(alpha = 0.72f))
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -329,6 +325,16 @@ private fun TaskRow(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
+
+/** Returns a neutral card/button fill that stays readable in light and dark themes. */
+@Composable
+private fun borderOnlyContainerColor(): Color {
+    return if (isSystemInDarkTheme()) {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.70f)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
     }
 }
 
