@@ -5,9 +5,12 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Intent
+import android.media.AudioAttributes
+import android.provider.Settings
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -62,6 +65,30 @@ class TaskNotifierTest {
     }
 
     @Test
+    @Config(sdk = [30, 33, 36])
+    fun manualPostsAreSilentWithoutChangingChannelSettings() {
+        val sound = Settings.System.DEFAULT_NOTIFICATION_URI
+        val vibration = longArrayOf(0, 100, 100, 100)
+        manager.createNotificationChannel(
+            NotificationChannel(TaskNotifier.ChannelId, "Task notifications", NotificationManager.IMPORTANCE_HIGH).apply {
+                setSound(sound, AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_NOTIFICATION).build())
+                vibrationPattern = vibration
+                enableVibration(true)
+            }
+        )
+
+        assertEquals(TaskNotificationResult.POSTED, notifier.postManual(task()))
+
+        assertSilent(manager.activeNotifications.single().notification)
+        val channel = manager.getNotificationChannel(TaskNotifier.ChannelId)
+        assertEquals(NotificationManager.IMPORTANCE_HIGH, channel.importance)
+        assertEquals(sound, channel.sound)
+        assertTrue(channel.shouldVibrate())
+        assertTrue(vibration.contentEquals(channel.vibrationPattern))
+    }
+
+    @Test
+    @Config(sdk = [30, 33, 36])
     fun repeatedTapRefreshesOneNotificationWithCurrentContentAndTarget() {
         val task = task()
         notifier.postManual(task)
@@ -70,6 +97,7 @@ class TaskNotifierTest {
         notifier.postManual(updated)
 
         val notification = manager.activeNotifications.single().notification
+        assertSilent(notification)
         assertEquals(updated.title, notification.extras.getCharSequence(Notification.EXTRA_TITLE))
         notification.contentIntent.send()
         assertTaskTarget(shadowOf(context).nextStartedActivity, updated)
@@ -93,12 +121,13 @@ class TaskNotifierTest {
     }
 
     @Test
+    @Config(sdk = [30, 33, 36])
     fun manualNotificationsCoexistWithBothAutomaticReminderTypes() {
         val task = task()
-        TaskReminderType.entries.forEach { notifier.postScheduled(task, it) }
 
         notifier.postManual(task)
         notifier.postManual(task)
+        TaskReminderType.entries.forEach { notifier.postScheduled(task, it) }
 
         val notifications = manager.activeNotifications
         assertEquals(3, notifications.size)
@@ -106,10 +135,14 @@ class TaskNotifierTest {
             val notification = notifications.single { it.tag == null && it.id == taskReminderStableId(task.id, type) }.notification
             val summary = if (type == TaskReminderType.SCHEDULED) "Scheduled: ${task.scheduled}" else "Due: ${task.due}"
             assertEquals(summary, notification.extras.getCharSequence(Notification.EXTRA_TEXT))
+            assertEquals(TaskNotifier.ChannelId, notification.channelId)
+            assertEquals(Notification.GROUP_ALERT_ALL, notification.groupAlertBehavior)
+            assertNull(notification.group)
             notification.contentIntent.send()
             assertTaskTarget(shadowOf(context).nextStartedActivity, task)
         }
         val manual = notifications.single { it.tag != null }.notification
+        assertSilent(manual)
         assertNotEquals(manual.contentIntent, notifications.first { it.tag == null }.notification.contentIntent)
     }
 
@@ -145,6 +178,17 @@ class TaskNotifierTest {
     fun postsOnAndroid11WithoutRuntimeNotificationPermission() {
         assertEquals(TaskNotificationResult.POSTED, notifier.postManual(task().copy(scheduled = null, due = null)))
         assertEquals(1, manager.activeNotifications.size)
+    }
+
+    private fun assertSilent(notification: Notification) {
+        assertEquals(TaskNotifier.ChannelId, notification.channelId)
+        assertNull(notification.sound)
+        assertNull(notification.vibrate)
+        assertEquals(0, notification.defaults and (Notification.DEFAULT_SOUND or Notification.DEFAULT_VIBRATE))
+        // AndroidX suppresses channel alerts by making this a child of its silent group.
+        assertEquals(Notification.GROUP_ALERT_SUMMARY, notification.groupAlertBehavior)
+        assertFalse(notification.flags and Notification.FLAG_GROUP_SUMMARY != 0)
+        assertEquals("silent", notification.group)
     }
 
     private fun assertTaskTarget(intent: Intent, task: StoredTask) {

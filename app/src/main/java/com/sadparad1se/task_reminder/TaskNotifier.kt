@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.net.Uri
+import androidx.core.app.NotificationCompat
 
 /** Result of an immediate attempt to post a task notification. */
 internal enum class TaskNotificationResult {
@@ -17,7 +18,7 @@ internal enum class TaskNotificationResult {
 internal class TaskNotifier(private val context: Context) {
     private val notificationManager = context.getSystemService(NotificationManager::class.java)
 
-    /** Creates or refreshes one manual notification without changing automatic reminders. */
+    /** Creates or refreshes one silent manual notification without changing automatic reminders. */
     fun postManual(task: StoredTask): TaskNotificationResult {
         if (!canPost()) return TaskNotificationResult.DISABLED
         val summary = task.scheduled?.let { "Scheduled: $it" }
@@ -35,7 +36,7 @@ internal class TaskNotifier(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         return post {
-            notificationManager.notify("manual_task:${task.fileUri}", 0, buildNotification(task, summary, contentIntent))
+            notificationManager.notify("manual_task:${task.fileUri}", 0, buildNotification(task, summary, contentIntent, silent = true))
         }
     }
 
@@ -59,7 +60,9 @@ internal class TaskNotifier(private val context: Context) {
 
     private fun canPost(): Boolean {
         if (!context.hasPostNotificationsPermission() || !notificationManager.areNotificationsEnabled()) return false
-        notificationManager.ensureDefaultChannel(ChannelId, "Task notifications")
+        if (notificationManager.getNotificationChannel(ChannelId) == null) {
+            notificationManager.ensureDefaultChannel(ChannelId, "Task notifications")
+        }
         return notificationManager.getNotificationChannel(ChannelId)?.importance != NotificationManager.IMPORTANCE_NONE
     }
 
@@ -73,19 +76,25 @@ internal class TaskNotifier(private val context: Context) {
         }
     }
 
-    private fun buildNotification(task: StoredTask, summary: String, contentIntent: PendingIntent): Notification {
+    private fun buildNotification(
+        task: StoredTask,
+        summary: String,
+        contentIntent: PendingIntent,
+        silent: Boolean = false
+    ): Notification {
         val details = listOfNotNull(
             task.scheduled?.let { "Scheduled: $it" },
             task.due?.let { "Due: $it" },
             task.excerpt.takeIf { it.isNotBlank() }
         ).joinToString("\n")
-        return Notification.Builder(context, ChannelId)
+        return NotificationCompat.Builder(context, ChannelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(task.title)
             .setContentText(summary)
-            .setStyle(Notification.BigTextStyle().bigText(details))
+            .setStyle(NotificationCompat.BigTextStyle().bigText(details))
             .setContentIntent(contentIntent)
             .setAutoCancel(true)
+            .setSilent(silent)
             .build()
     }
 
