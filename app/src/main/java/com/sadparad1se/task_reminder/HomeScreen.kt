@@ -72,7 +72,8 @@ fun HomeScreen(
     onRescan: () -> Unit,
     canRescan: Boolean,
     isScanning: Boolean,
-    onOpenSettings: () -> Unit
+    onOpenSettings: () -> Unit,
+    notificationSuccessCounts: Map<String, Long> = emptyMap()
 ) {
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -170,11 +171,12 @@ fun HomeScreen(
                     )
                 }
             } else {
-                items(tasks) { task ->
+                items(tasks, key = { it.fileUri }) { task ->
                     TaskRow(
                         task = task,
                         onClick = { onTaskClick(task) },
-                        onNotifyClick = { onNotifyTask(task) }
+                        onNotifyClick = { onNotifyTask(task) },
+                        notificationSuccessCount = notificationSuccessCounts[task.fileUri] ?: 0L
                     )
                 }
             }
@@ -292,7 +294,8 @@ private fun TaskTimeBucket.filterColor(): Color {
 private fun TaskRow(
     task: TaskListItem,
     onClick: () -> Unit,
-    onNotifyClick: () -> Unit
+    onNotifyClick: () -> Unit,
+    notificationSuccessCount: Long
 ) {
     val accentColor = parseTaskNotesColor(task.priorityColor)
         ?: parseTaskNotesColor(task.statusColor)
@@ -368,17 +371,12 @@ private fun TaskRow(
                             )
                         }
                     }
-                    IconButton(
+                    TaskNotificationBell(
+                        fileUri = task.fileUri,
+                        taskTitle = task.title,
+                        successCount = notificationSuccessCount,
                         onClick = onNotifyClick,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_notification_bell),
-                            contentDescription = stringResource(R.string.create_task_notification, task.title),
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
+                    )
                 }
             }
         }

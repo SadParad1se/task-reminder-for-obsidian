@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -50,6 +51,10 @@ class MainActivity : ComponentActivity() {
                     var onExactAlarmPermissionGrantedDuringOnboarding by remember { mutableStateOf<(() -> Unit)?>(null) }
                     var pendingNotificationFileUri by rememberSaveable { mutableStateOf<String?>(null) }
                     var isScanning by remember { mutableStateOf(false) }
+                    val notificationSuccessCounts = remember { mutableStateMapOf<String, Long>() }
+                    val onNotificationPosted: (String) -> Unit = { fileUri ->
+                        notificationSuccessCounts[fileUri] = (notificationSuccessCounts[fileUri] ?: 0L) + 1L
+                    }
 
                     val loadedSettings = settings ?: return@Surface
                     val selectedVaultName = remember(loadedSettings.vaultUris) {
@@ -78,7 +83,7 @@ class MainActivity : ComponentActivity() {
                         if (hasNotificationPermission) {
                             onNotificationPermissionGrantedDuringOnboarding?.invoke()
                             onNotificationPermissionGrantedDuringOnboarding = null
-                            pendingFileUri?.let { postTaskNotification(taskRepository, it) }
+                            pendingFileUri?.let { postTaskNotification(taskRepository, it, onNotificationPosted) }
                         } else if (pendingFileUri != null) {
                             Toast.makeText(this@MainActivity, R.string.task_notifications_disabled, Toast.LENGTH_LONG).show()
                         }
@@ -182,7 +187,7 @@ class MainActivity : ComponentActivity() {
                             },
                             onNotifyTask = { task ->
                                 if (taskRepository.hasNotificationPermission()) {
-                                    postTaskNotification(taskRepository, task.fileUri)
+                                    postTaskNotification(taskRepository, task.fileUri, onNotificationPosted)
                                 } else if (pendingNotificationFileUri == null) {
                                     pendingNotificationFileUri = task.fileUri
                                     notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -202,6 +207,7 @@ class MainActivity : ComponentActivity() {
                             },
                             canRescan = loadedSettings.vaultUris.isNotEmpty(),
                             isScanning = isScanning,
+                            notificationSuccessCounts = notificationSuccessCounts.toMap(),
                             onOpenSettings = {
                                 startActivity(Intent(this, SettingsActivity::class.java))
                             }
@@ -219,15 +225,10 @@ class MainActivity : ComponentActivity() {
         handleTaskNotesOpenIntent(intent)
     }
 
-    /** Posts a manual notification and explains whether Android accepted the request. */
-    private fun postTaskNotification(repository: TaskRepository, fileUri: String) {
+    /** Posts a manual notification, animating success or explaining why posting failed. */
+    private fun postTaskNotification(repository: TaskRepository, fileUri: String, onPosted: (String) -> Unit) {
         lifecycleScope.launch {
-            val message = when (repository.postTaskNotification(fileUri)) {
-                TaskNotificationResult.POSTED -> R.string.task_notification_created
-                TaskNotificationResult.DISABLED -> R.string.task_notifications_disabled
-                TaskNotificationResult.TASK_NOT_FOUND -> R.string.task_notification_missing
-            }
-            Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+            showTaskNotificationFeedback(fileUri, repository.postTaskNotification(fileUri), onPosted)
         }
     }
 
