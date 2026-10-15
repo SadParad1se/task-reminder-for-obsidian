@@ -16,8 +16,8 @@ android {
         applicationId = "com.sadparad1se.task_reminder"
         minSdk = 30
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "1.2.0"
     }
 
     buildTypes {
@@ -47,7 +47,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
-    val composeBom = platform("androidx.compose:compose-bom:2026.05.00")
+    val composeBom = platform("androidx.compose:compose-bom:2026.06.01")
     implementation(composeBom)
 
     // Choose one of the following:
@@ -71,12 +71,12 @@ dependencies {
     // Optional - Integration with ViewModels
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation("androidx.datastore:datastore-preferences:1.2.1")
     implementation("androidx.documentfile:documentfile:1.1.0")
-    implementation("androidx.room:room-runtime:2.8.4")
-    implementation("androidx.room:room-ktx:2.8.4")
-    implementation("androidx.work:work-runtime-ktx:2.10.0")
-    ksp("androidx.room:room-compiler:2.8.4")
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)
+    implementation("androidx.work:work-runtime-ktx:2.12.0")
+    ksp(libs.androidx.room.compiler)
 //    // Optional - Integration with LiveData
 //    implementation("androidx.compose.runtime:runtime-livedata")
 //    // Optional - Integration with RxJava
