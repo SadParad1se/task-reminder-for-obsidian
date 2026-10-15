@@ -1,7 +1,6 @@
 package com.sadparad1se.task_reminder
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
@@ -23,6 +22,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -68,6 +68,9 @@ fun HomeScreen(
     onTimeBucketToggle: (TaskTimeBucket) -> Unit,
     onTaskClick: (TaskListItem) -> Unit,
     onNotifyTask: (TaskListItem) -> Unit,
+    onRescan: () -> Unit,
+    canRescan: Boolean,
+    isScanning: Boolean,
     onOpenSettings: () -> Unit
 ) {
     val listState = rememberLazyListState()
@@ -84,16 +87,27 @@ fun HomeScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                    TextButton(
+                        onClick = onRescan,
+                        enabled = canRescan && !isScanning
                     ) {
-                        Image(
-                            painter = painterResource(id = R.mipmap.ic_launcher),
-                            contentDescription = null,
-                            modifier = Modifier.size(28.dp)
+                        if (isScanning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_refresh),
+                                contentDescription = null,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Text(
+                            text = stringResource(R.string.rescan),
+                            modifier = Modifier.padding(start = 8.dp)
                         )
-                        AppTitle()
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -102,8 +116,12 @@ fun HomeScreen(
                     actionIconContentColor = MaterialTheme.colorScheme.primary
                 ),
                 actions = {
-                    TextButton(onClick = onOpenSettings) {
-                        Text("Settings")
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_settings),
+                            contentDescription = stringResource(R.string.open_settings),
+                            modifier = Modifier.size(24.dp)
+                        )
                     }
                 }
             )
@@ -160,23 +178,6 @@ fun HomeScreen(
             }
         }
     }
-}
-
-/** Displays the app name with a logo-inspired color sweep. */
-@Composable
-private fun AppTitle() {
-    Text(
-        text = "Task Reminder",
-        style = MaterialTheme.typography.titleLarge.copy(
-            brush = Brush.horizontalGradient(
-                colors = listOf(
-                    MaterialTheme.colorScheme.primary,
-                    MaterialTheme.colorScheme.secondary,
-                    MaterialTheme.colorScheme.tertiary
-                )
-            )
-        )
-    )
 }
 
 /** Displays priority and time bucket toggles above the task cards. */

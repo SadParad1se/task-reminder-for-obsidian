@@ -49,6 +49,7 @@ class MainActivity : ComponentActivity() {
                     var onNotificationPermissionGrantedDuringOnboarding by remember { mutableStateOf<(() -> Unit)?>(null) }
                     var onExactAlarmPermissionGrantedDuringOnboarding by remember { mutableStateOf<(() -> Unit)?>(null) }
                     var pendingNotificationFileUri by rememberSaveable { mutableStateOf<String?>(null) }
+                    var isScanning by remember { mutableStateOf(false) }
 
                     val loadedSettings = settings ?: return@Surface
                     val selectedVaultName = remember(loadedSettings.vaultUris) {
@@ -187,6 +188,20 @@ class MainActivity : ComponentActivity() {
                                     notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
                                 }
                             },
+                            onRescan = {
+                                if (!isScanning && loadedSettings.vaultUris.isNotEmpty()) {
+                                    isScanning = true
+                                    scope.launch {
+                                        try {
+                                            taskRepository.scanVaults(loadedSettings.vaultUris)
+                                        } finally {
+                                            isScanning = false
+                                        }
+                                    }
+                                }
+                            },
+                            canRescan = loadedSettings.vaultUris.isNotEmpty(),
+                            isScanning = isScanning,
                             onOpenSettings = {
                                 startActivity(Intent(this, SettingsActivity::class.java))
                             }

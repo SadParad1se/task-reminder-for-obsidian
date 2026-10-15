@@ -47,6 +47,9 @@ class HomeScreenTest {
                         onTimeBucketToggle = {},
                         onTaskClick = { calls.add("open:${it.title}") },
                         onNotifyTask = { calls.add("notify:${it.title}") },
+                        onRescan = {},
+                        canRescan = true,
+                        isScanning = false,
                         onOpenSettings = {}
                     )
                 }
@@ -102,6 +105,9 @@ class HomeScreenTest {
                             onTimeBucketToggle = {},
                             onTaskClick = { throw AssertionError("Bell tap opened Obsidian") },
                             onNotifyTask = { notified.add(it.title) },
+                            onRescan = {},
+                            canRescan = true,
+                            isScanning = false,
                             onOpenSettings = {}
                         )
                     }

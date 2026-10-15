@@ -1,5 +1,7 @@
 <resources>
     <string name="app_name">Task Reminder for Obsidian</string>
+    <string name="rescan">re-scan</string>
+    <string name="open_settings">Settings</string>
     <string name="create_task_notification">Create notification for %1$s</string>
     <string name="task_notification_created">Notification created.</string>
     <string name="task_notifications_disabled">Notifications are disabled. Enable Task notifications in Android notification settings.</string>
