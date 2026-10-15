@@ -36,6 +36,13 @@ android {
     buildFeatures {
         compose = true
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+        unitTests.all {
+            // Robolectric's Android 16 shared-memory emulation uses JDK file-descriptor APIs.
+            it.jvmArgs("--add-exports=java.base/jdk.internal.access=ALL-UNNAMED")
+        }
+    }
 }
 
 composeCompiler {
@@ -47,6 +54,7 @@ dependencies {
     implementation(libs.androidx.core.ktx)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
+    testImplementation(libs.robolectric)
     val composeBom = platform("androidx.compose:compose-bom:2026.06.01")
     implementation(composeBom)
 

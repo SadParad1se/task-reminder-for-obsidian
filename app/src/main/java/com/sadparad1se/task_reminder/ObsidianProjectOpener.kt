@@ -22,16 +22,21 @@ object ObsidianProjectOpener {
     /** Creates the app intent used when the user taps a task reminder notification. */
     fun createTaskOpenIntent(context: Context, task: StoredTask): Intent {
         return Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             putExtra(ExtraVaultUri, task.vaultUri)
             putExtra(ExtraFilePath, task.filePath)
         }
     }
 
-    /** Extracts a TaskNotes open target from an incoming app intent. */
-    fun targetFromIntent(intent: Intent): ObsidianTaskNotesTarget? {
-        val vaultUri = intent.getStringExtra(ExtraVaultUri)?.takeIf { it.isNotBlank() } ?: return null
-        val filePath = intent.getStringExtra(ExtraFilePath)?.takeIf { it.isNotBlank() } ?: return null
+    /** Consumes a task request before launching, discarding requests restored by Android. */
+    internal fun consumeTaskOpenTarget(intent: Intent, isRestored: Boolean = false): ObsidianTaskNotesTarget? {
+        val vaultUri = intent.getStringExtra(ExtraVaultUri)
+        val filePath = intent.getStringExtra(ExtraFilePath)
+        intent.removeExtra(ExtraVaultUri)
+        intent.removeExtra(ExtraFilePath)
+
+        if (isRestored || intent.flags and Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY != 0) return null
+        if (vaultUri.isNullOrBlank() || filePath.isNullOrBlank()) return null
         return ObsidianTaskNotesTarget(vaultUri, filePath)
     }
 

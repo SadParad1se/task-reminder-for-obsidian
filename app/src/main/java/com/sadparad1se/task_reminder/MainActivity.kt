@@ -180,22 +180,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-        handleTaskNotesOpenIntent(intent)
+        handleTaskNotesOpenIntent(intent, isRestored = savedInstanceState != null)
     }
 
     /** Handles new intents delivered while the existing activity instance is reused. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent)
         handleTaskNotesOpenIntent(intent)
     }
 
     /** Opens the task file when a notification launches the app with vault metadata. */
-    private fun handleTaskNotesOpenIntent(intent: Intent) {
-        ObsidianProjectOpener.targetFromIntent(intent)?.let { target ->
-            lifecycleScope.launch {
-                ObsidianProjectOpener.openTaskNotes(this@MainActivity, target, showToast = false)
-            }
+    private fun handleTaskNotesOpenIntent(intent: Intent, isRestored: Boolean = false) {
+        val target = ObsidianProjectOpener.consumeTaskOpenTarget(intent, isRestored)
+        setIntent(intent)
+        if (target == null) return
+
+        lifecycleScope.launch {
+            ObsidianProjectOpener.openTaskNotes(this@MainActivity, target, showToast = false)
         }
     }
 
