@@ -59,6 +59,13 @@ class TaskRepository(context: Context) {
         return taskActivityMonitor.scanVaults(vaultUris, scanner::scanVault, notificationScheduler::rescheduleAll)
     }
 
+    /** Manually scans all selected vaults and restarts background timing after success. */
+    suspend fun rescanVaults(): Boolean = ManualVaultRescanner(
+        settingsRepository,
+        this::scanVaults,
+        VaultScanWorkScheduler(appContext)::restartAfterManualScan
+    ).rescan()
+
     /** Deletes all app-owned data and permissions linked to one removed vault. */
     suspend fun deleteVaultAppData(vaultUri: String) {
         database.taskDao().getTasksByVaultUri(vaultUri)

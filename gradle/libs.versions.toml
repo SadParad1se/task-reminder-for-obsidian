@@ -7,6 +7,7 @@ ksp = "2.3.12"
 orgJson = "20260814"
 room = "2.8.5"
 robolectric = "4.17"
+work = "2.12.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -14,6 +15,8 @@ androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-te
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
+androidx-work-testing = { group = "androidx.work", name = "work-testing", version.ref = "work" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 kotlin-gradle-plugin = { group = "org.jetbrains.kotlin", name = "kotlin-gradle-plugin", version.ref = "kotlin" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }

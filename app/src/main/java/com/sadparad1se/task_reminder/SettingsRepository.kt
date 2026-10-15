@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.work.await
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
@@ -107,10 +108,12 @@ class SettingsRepository(
 
     /** Persists the user's chosen vault scan frequency. */
     suspend fun updateScanFrequency(scanFrequency: ScanFrequency) {
-        dataStore.edit { preferences ->
-            preferences[Keys.SCAN_FREQUENCY] = scanFrequency.storageValue
+        TaskActivityMonitor.mutex.withLock {
+            dataStore.edit { preferences ->
+                preferences[Keys.SCAN_FREQUENCY] = scanFrequency.storageValue
+            }
+            VaultScanWorkScheduler(context).schedule(settingsFlow.first(), clearNextScanOverride = true).await()
         }
-        scheduleVaultScanWork()
     }
 
     /** Keeps the persistent background scan job aligned with the saved vault settings. */

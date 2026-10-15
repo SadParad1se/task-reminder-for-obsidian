@@ -193,7 +193,7 @@ class MainActivity : ComponentActivity() {
                                     isScanning = true
                                     scope.launch {
                                         try {
-                                            taskRepository.scanVaults(loadedSettings.vaultUris)
+                                            taskRepository.rescanVaults()
                                         } finally {
                                             isScanning = false
                                         }

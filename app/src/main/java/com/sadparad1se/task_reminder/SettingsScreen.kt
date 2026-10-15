@@ -134,7 +134,7 @@ fun SettingsScreen() {
                 settingsRepository.removeVaultUri(vaultUri)
             }
         },
-        onScanNow = { scope.launch { taskRepository.scanVaults(settings.vaultUris) } },
+        onScanNow = { scope.launch { taskRepository.rescanVaults() } },
         onScanFrequencySelected = { frequency ->
             scope.launch { settingsRepository.updateScanFrequency(frequency) }
         },

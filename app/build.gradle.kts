@@ -56,6 +56,7 @@ dependencies {
     testImplementation(libs.org.json)
     testImplementation(libs.robolectric)
     testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.work.testing)
     val composeBom = platform("androidx.compose:compose-bom:2026.06.01")
     implementation(composeBom)
 
@@ -84,7 +85,7 @@ dependencies {
     implementation("androidx.documentfile:documentfile:1.1.0")
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
-    implementation("androidx.work:work-runtime-ktx:2.12.0")
+    implementation(libs.androidx.work.runtime.ktx)
     ksp(libs.androidx.room.compiler)
 //    // Optional - Integration with LiveData
 //    implementation("androidx.compose.runtime:runtime-livedata")
