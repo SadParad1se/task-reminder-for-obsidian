@@ -4,9 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import java.time.Duration
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
 
@@ -15,7 +13,7 @@ class TaskRepository(context: Context) {
     private val appContext = context.applicationContext
     private val database = TaskDatabase.getInstance(appContext)
     private val settingsRepository = SettingsRepository(appContext)
-    private val staleTaskUpdateNotifier = StaleTaskUpdateNotifier(appContext)
+    private val taskActivityMonitor = TaskActivityMonitor(settingsRepository, StaleTaskUpdateNotifier(appContext))
     private val notificationScheduler = TaskNotificationScheduler(
         context = appContext,
         taskDao = database.taskDao()
@@ -53,47 +51,12 @@ class TaskRepository(context: Context) {
 
     /** Scans one vault and updates stored tasks from TaskNotes Markdown files. */
     suspend fun scanVault(vaultUri: String): Boolean {
-        val scanSucceeded = scanner.scanVault(vaultUri)
-        notificationScheduler.rescheduleAll()
-        if (scanSucceeded) {
-            notifyIfTasksHaveNotChangedRecently(database.taskDao().getTasksByVaultUri(vaultUri))
-        }
-        return scanSucceeded
+        return scanVaults(listOf(vaultUri))
     }
 
     /** Scans each selected vault sequentially. */
     suspend fun scanVaults(vaultUris: List<String>): Boolean {
-        var allScansSucceeded = true
-        vaultUris.forEach { vaultUri ->
-            if (!scanner.scanVault(vaultUri)) {
-                allScansSucceeded = false
-            }
-        }
-        notificationScheduler.rescheduleAll()
-        if (allScansSucceeded) {
-            notifyIfTasksHaveNotChangedRecently(database.taskDao().getAllTasks())
-        }
-        return allScansSucceeded
-    }
-
-    /** Sends a reminder when all scanned tasks are older than the stale update threshold. */
-    private suspend fun notifyIfTasksHaveNotChangedRecently(tasks: List<StoredTask>) {
-        if (tasks.isEmpty()) return
-
-        val settings = settingsRepository.settingsFlow.first()
-        if (!settings.staleTaskUpdateNotificationsEnabled) return
-
-        val now = System.currentTimeMillis()
-        if (now - settings.lastStaleTaskUpdateNotificationAt < StaleTaskNotificationCooldown.toMillis()) return
-
-        val newestTaskUpdateAt = tasks.maxOfOrNull { task ->
-            task.dateModified?.toTaskNotesEpochMillisOrNull() ?: task.lastModified ?: 0L
-        } ?: return
-        if (newestTaskUpdateAt <= 0L) return
-        if (now - newestTaskUpdateAt < StaleTaskUpdateThreshold.toMillis()) return
-
-        staleTaskUpdateNotifier.notifyNoRecentTaskUpdates()
-        settingsRepository.updateLastStaleTaskUpdateNotificationAt(now)
+        return taskActivityMonitor.scanVaults(vaultUris, scanner::scanVault, notificationScheduler::rescheduleAll)
     }
 
     /** Deletes all app-owned data and permissions linked to one removed vault. */
@@ -164,8 +127,4 @@ class TaskRepository(context: Context) {
             .toList()
     }
 
-    private companion object {
-        val StaleTaskUpdateThreshold: Duration = Duration.ofHours(24)
-        val StaleTaskNotificationCooldown: Duration = Duration.ofHours(24)
-    }
 }

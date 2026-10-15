@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withContext
 
 /** Scans selected Obsidian vault folders and syncs TaskNotes Markdown files into Room. */
@@ -15,14 +16,16 @@ class VaultScanner(
     private val notificationScheduler: TaskNotificationScheduler,
     private val scanFailureNotifier: ScanFailureNotifier = ScanFailureNotifier(context),
     private val parser: MarkdownTaskParser = MarkdownTaskParser(),
-    private val taskNotesSettingsParser: TaskNotesSettingsParser = TaskNotesSettingsParser()
+    private val taskNotesSettingsParser: TaskNotesSettingsParser = TaskNotesSettingsParser(),
+    private val now: () -> Long = System::currentTimeMillis
 ) {
     private val taskNotesSettingsCache = mutableMapOf<String, CachedTaskNotesSettings>()
 
     /** Scans one vault URI, updating scan state and notifying the user if the scan fails. */
-    suspend fun scanVault(vaultUri: String): Boolean = withContext(Dispatchers.IO) {
-        val scanStartedAt = System.currentTimeMillis()
+    suspend fun scanVault(vaultUri: String): VaultScanResult = withContext(Dispatchers.IO) {
+        val scanStartedAt = now()
         try {
+            val previousScanAt = vaultScanStateDao.get(vaultUri)?.lastScannedAt ?: 0L
             val vaultDocument = DocumentFile.fromTreeUri(context, Uri.parse(vaultUri))
                 ?: throw IllegalStateException("Vault folder cannot be opened")
             if (!vaultDocument.isObsidianVaultRoot()) {
@@ -37,15 +40,17 @@ class VaultScanner(
                 taskDao.deleteByVaultUri(vaultUri)
                 0L
             } else {
-                vaultScanStateDao.get(vaultUri)?.lastScannedAt ?: 0L
+                previousScanAt
             }
 
             val seenFileUris = mutableSetOf<String>()
-            scanDocumentTreeEntry(
+            val taskActivityFound = scanDocumentTreeEntry(
                 vaultUri = vaultUri,
                 document = tasksFolderDocument,
                 relativePath = loadedSettings.settings.tasksFolder,
                 lastScannedAt = lastScannedAt,
+                previousScanAt = previousScanAt,
+                scanStartedAt = scanStartedAt,
                 taskNotesSettings = loadedSettings.settings,
                 seenFileUris = seenFileUris
             )
@@ -59,8 +64,11 @@ class VaultScanner(
                     lastScanFailedAt = null
                 )
             )
-            true
+            VaultScanResult(true, scanStartedAt, previousScanAt <= 0L || taskActivityFound)
         } catch (exception: Exception) {
+            // A partially rebuilt database must be rebuilt again on the next attempt.
+            taskNotesSettingsCache.remove(vaultUri)
+            if (exception is CancellationException) throw exception
             val previousState = vaultScanStateDao.get(vaultUri)
             vaultScanStateDao.upsert(
                 VaultScanState(
@@ -71,7 +79,7 @@ class VaultScanner(
                 )
             )
             scanFailureNotifier.notifyScanFailed()
-            false
+            VaultScanResult(false, scanStartedAt)
         }
     }
 
@@ -116,46 +124,50 @@ class VaultScanner(
             ?: this::class.java.simpleName
     }
 
-    /** Recursively scans a document tree entry, processing Markdown files that changed since the last scan. */
+    /** Reads task dates before filtering completed tasks or applying incremental database updates. */
     private suspend fun scanDocumentTreeEntry(
         vaultUri: String,
         document: DocumentFile,
         relativePath: String,
         lastScannedAt: Long,
+        previousScanAt: Long,
+        scanStartedAt: Long,
         taskNotesSettings: TaskNotesSettings,
         seenFileUris: MutableSet<String>
-    ) {
+    ): Boolean {
         if (document.isDirectory) {
+            var foundActivity = false
             document.listFiles().forEach { child ->
-                val childName = child.name ?: return@forEach
+                val childName = child.name ?: error("Vault entry cannot be read")
                 val childPath = if (relativePath.isBlank()) childName else "$relativePath/$childName"
-                scanDocumentTreeEntry(
+                val childActivity = scanDocumentTreeEntry(
                     vaultUri = vaultUri,
                     document = child,
                     relativePath = childPath,
                     lastScannedAt = lastScannedAt,
+                    previousScanAt = previousScanAt,
+                    scanStartedAt = scanStartedAt,
                     taskNotesSettings = taskNotesSettings,
                     seenFileUris = seenFileUris
                 )
+                foundActivity = foundActivity || childActivity
             }
-            return
+            return foundActivity
         }
 
-        val fileName = document.name ?: return
-        if (!fileName.endsWith(".md", ignoreCase = true)) return
+        val fileName = document.name ?: error("Vault entry cannot be read")
+        if (!fileName.endsWith(".md", ignoreCase = true)) return false
         seenFileUris.add(document.uri.toString())
 
         val lastModified = queryLastModifiedMillis(document.uri)
-        // Some document providers do not expose COLUMN_LAST_MODIFIED. Without a reliable timestamp,
-        // incremental scanning cannot safely detect changes, so those files are re-read each scan.
-        if (lastModified != null && lastModified <= lastScannedAt) return
-
-        val markdown = readDocumentText(document.uri) ?: return
+        // File timestamps alone cannot tell us whether TaskNotes dateModified changed.
+        val markdown = readDocumentText(document.uri) ?: error("Task file cannot be read: $fileName")
         val parsedTaskNote = parser.parseTaskNote(
             markdown = markdown,
             fileName = fileName
         )
-        syncParsedTaskWithDatabase(
+        val updated = parsedTaskNote?.wasUpdatedBetween(previousScanAt, scanStartedAt, lastModified) == true
+        if (lastModified == null || lastModified > lastScannedAt || updated) syncParsedTaskWithDatabase(
             parsedTaskNote = parsedTaskNote,
             vaultUri = vaultUri,
             document = document,
@@ -164,6 +176,7 @@ class VaultScanner(
             lastModified = lastModified,
             taskNotesSettings = taskNotesSettings
         )
+        return updated
     }
 
     /** Upserts active task metadata or deletes rows for non-task notes and completed statuses. */

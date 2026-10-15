@@ -1,0 +1,229 @@
+package com.sadparad1se.task_reminder
+
+import android.content.pm.ProviderInfo
+import android.content.ContentProvider
+import android.content.ContentValues
+import android.database.Cursor
+import android.database.MatrixCursor
+import android.os.ParcelFileDescriptor
+import android.net.Uri
+import android.provider.DocumentsContract
+import androidx.room.Room
+import kotlinx.coroutines.runBlocking
+import org.junit.After
+import org.junit.Assert.*
+import org.junit.Before
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowContentResolver
+import java.io.File
+import java.io.FileNotFoundException
+import java.time.Instant
+
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [36])
+class VaultScannerActivityTest {
+    private val context = RuntimeEnvironment.getApplication()
+    private val database = Room.inMemoryDatabaseBuilder(context, TaskDatabase::class.java).build()
+    private val root = File(context.cacheDir, "test-vault").apply { mkdirs() }
+    private val provider = TestVaultDocumentsProvider(root)
+    private val uri = DocumentsContract.buildTreeDocumentUri("vault.test", "root").toString()
+    private var clock = System.currentTimeMillis() + 10_000
+    private val hour = 3_600_000L
+    private lateinit var scanner: VaultScanner
+
+    @Before
+    fun prepareVault() {
+        provider.attachInfo(context, ProviderInfo().apply {
+            authority = "vault.test"
+            exported = true
+            grantUriPermissions = true
+            readPermission = "android.permission.MANAGE_DOCUMENTS"
+            writePermission = "android.permission.MANAGE_DOCUMENTS"
+        })
+        ShadowContentResolver.registerProviderInternal("vault.test", provider)
+        write(".obsidian/plugins/tasknotes/data.json", """{"tasksFolder":"Tasks","customStatuses":[{"value":"done","isCompleted":true}]}""")
+        File(root, "Tasks").mkdirs()
+        scanner = newScanner()
+    }
+
+    @After
+    fun closeDatabase() { database.close() }
+
+    private fun newScanner() = VaultScanner(
+        context, database.taskDao(), database.vaultScanStateDao(),
+        TaskNotificationScheduler(context, database.taskDao()), now = { clock }
+    )
+
+    private fun write(path: String, text: String, modifiedAt: Long = clock - 2 * hour): File {
+        return File(root, path).apply {
+            parentFile?.mkdirs()
+            writeText(text)
+            setLastModified(modifiedAt)
+        }
+    }
+
+    private fun taskText(dateModified: Long? = clock - 2 * hour, completed: Boolean = false): String {
+        val modified = dateModified?.let { "dateModified: ${Instant.ofEpochMilli(it)}" }.orEmpty()
+        return "---\ntags: [task]\nstatus: ${if (completed) "done" else "open"}\n$modified\n---\n# Example task\n"
+    }
+
+    @Test
+    fun firstSuccessfulScanCountsEvenWhenEmptyOrAllTasksAreOld() = runBlocking {
+        val initial = scanner.scanVault(uri)
+        assertTrue(database.vaultScanStateDao().get(uri)?.lastScanError, initial.succeeded)
+        assertTrue(initial.taskActivityFound)
+        clock += hour
+        write("Tasks/old.md", taskText(clock - 3 * hour))
+        val result = scanner.scanVault(uri)
+        assertTrue(result.succeeded)
+        assertFalse(result.taskActivityFound)
+    }
+
+    @Test
+    fun forcedRescanAndScannerRestartDoNotCountUnchangedTasksAsActivity() = runBlocking {
+        write("Tasks/task.md", taskText())
+        assertTrue(scanner.scanVault(uri).taskActivityFound)
+        clock += hour
+        assertFalse(scanner.scanVault(uri).taskActivityFound)
+        clock += hour
+        // A new scanner has no settings cache and forces database rebuilding.
+        assertFalse(newScanner().scanVault(uri).taskActivityFound)
+        assertEquals(1, database.taskDao().getAllTasks().size)
+    }
+
+    @Test
+    fun completionCountsBeforeCompletedTaskIsRemovedFromActiveDatabase() = runBlocking {
+        write("Tasks/task.md", taskText())
+        scanner.scanVault(uri)
+        clock += hour
+        write("Tasks/task.md", taskText(clock - 1, completed = true), modifiedAt = clock - 1)
+        val result = scanner.scanVault(uri)
+        assertTrue(result.taskActivityFound)
+        assertTrue(database.taskDao().getAllTasks().isEmpty())
+    }
+
+    @Test
+    fun updatedTaskNotesDateCountsEvenWhenFileTimestampIsUnchanged() = runBlocking {
+        val oldFileTime = clock - 2 * hour
+        write("Tasks/task.md", taskText(), oldFileTime)
+        scanner.scanVault(uri)
+        clock += hour
+        write("Tasks/task.md", taskText(clock - 1), oldFileTime)
+        assertTrue(scanner.scanVault(uri).taskActivityFound)
+        assertEquals(Instant.ofEpochMilli(clock - 1).toString(), database.taskDao().getAllTasks().single().dateModified)
+    }
+
+    @Test
+    fun bodyEditCountsFromFileDateButOrdinaryNotesDoNot() = runBlocking {
+        write("Tasks/task.md", taskText())
+        scanner.scanVault(uri)
+        clock += hour
+        write("Tasks/ordinary.md", "# Not a task", clock - 1)
+        assertFalse(scanner.scanVault(uri).taskActivityFound)
+        clock += hour
+        write("Tasks/task.md", taskText(clock - 4 * hour) + "Edited body", clock - 1)
+        assertTrue(scanner.scanVault(uri).taskActivityFound)
+    }
+
+    @Test
+    fun editsAfterScanStartAreDetectedByNextScanAndFutureDatesDoNotResetForever() = runBlocking {
+        write("Tasks/task.md", taskText())
+        scanner.scanVault(uri)
+        clock += hour
+        val editTime = clock + 1
+        write("Tasks/task.md", taskText(editTime), editTime)
+        assertFalse(scanner.scanVault(uri).taskActivityFound)
+        clock += hour
+        assertTrue(scanner.scanVault(uri).taskActivityFound)
+        clock += hour
+        assertFalse(scanner.scanVault(uri).taskActivityFound)
+    }
+
+    @Test
+    fun unreadableTaskFailsScanWithoutAdvancingCheckpointOrClaimingActivity() = runBlocking {
+        write("Tasks/task.md", taskText())
+        scanner.scanVault(uri)
+        val previous = database.vaultScanStateDao().get(uri)!!.lastScannedAt
+        clock += hour
+        write("Tasks/task.md", taskText(clock - 1), clock - 1)
+        provider.unreadable = "root/Tasks/task.md"
+        val result = scanner.scanVault(uri)
+        assertFalse(result.succeeded)
+        assertFalse(result.taskActivityFound)
+        assertEquals(previous, database.vaultScanStateDao().get(uri)!!.lastScannedAt)
+        provider.unreadable = null
+        assertTrue(scanner.scanVault(uri).taskActivityFound)
+    }
+
+    @Test
+    fun missingDatesNeverTurnAnUnchangedFileIntoRepeatedActivity() {
+        val parsed = MarkdownTaskParser().parseTaskNote(taskText(null), "task.md")!!
+        assertFalse(parsed.wasUpdatedBetween(clock - hour, clock, null))
+        assertFalse(parsed.copy(dateModified = "invalid").wasUpdatedBetween(clock - hour, clock, null))
+        assertTrue(parsed.wasUpdatedBetween(clock - hour, clock, clock))
+    }
+}
+
+/** Real document-tree queries backed by temporary files, including configurable read failures. */
+private class TestVaultDocumentsProvider(private val root: File) : ContentProvider() {
+    var unreadable: String? = null
+    override fun onCreate() = true
+    // Robolectric routes resolver calls through the legacy query overload, which Android 16's
+    // DocumentsProvider rejects. Dispatch the document URIs explicitly in this test provider.
+    override fun query(uri: Uri, projection: Array<out String>?, selection: String?, selectionArgs: Array<out String>?, sortOrder: String?): Cursor {
+        val id = DocumentsContract.getDocumentId(uri)
+        return if (uri.lastPathSegment == "children") queryChildDocuments(id, projection) else queryDocument(id, projection)
+    }
+
+    override fun getType(uri: Uri): String = if (file(DocumentsContract.getDocumentId(uri)).isDirectory) {
+        DocumentsContract.Document.MIME_TYPE_DIR
+    } else {
+        "text/markdown"
+    }
+
+    override fun insert(uri: Uri, values: ContentValues?): Uri = error("Read-only test provider")
+    override fun delete(uri: Uri, selection: String?, selectionArgs: Array<out String>?): Int = error("Read-only test provider")
+    override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int = error("Read-only test provider")
+
+    private fun queryDocument(documentId: String, projection: Array<out String>?): Cursor {
+        return cursor(projection).apply { addDocument(documentId) }
+    }
+
+    private fun queryChildDocuments(parentDocumentId: String, projection: Array<out String>?): Cursor {
+        return cursor(projection).apply {
+            file(parentDocumentId).listFiles().orEmpty().forEach { addDocument("$parentDocumentId/${it.name}") }
+        }
+    }
+
+    override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
+        val documentId = DocumentsContract.getDocumentId(uri)
+        if (documentId == unreadable) throw FileNotFoundException("Test read failure")
+        return ParcelFileDescriptor.open(file(documentId), ParcelFileDescriptor.MODE_READ_ONLY)
+    }
+
+    private fun file(id: String) = if (id == "root") root else File(root, id.removePrefix("root/"))
+
+    private fun cursor(projection: Array<out String>?) = MatrixCursor(projection ?: arrayOf(
+        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+        DocumentsContract.Document.COLUMN_MIME_TYPE,
+        DocumentsContract.Document.COLUMN_LAST_MODIFIED
+    ))
+
+    private fun MatrixCursor.addDocument(id: String) {
+        val file = file(id)
+        addRow(columnNames.map<String, Any?> {
+            when (it) {
+                DocumentsContract.Document.COLUMN_DOCUMENT_ID -> id
+                DocumentsContract.Document.COLUMN_DISPLAY_NAME -> file.name
+                DocumentsContract.Document.COLUMN_MIME_TYPE -> if (file.isDirectory) DocumentsContract.Document.MIME_TYPE_DIR else "text/markdown"
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED -> file.lastModified()
+                else -> null
+            }
+        }.toTypedArray())
+    }
+}

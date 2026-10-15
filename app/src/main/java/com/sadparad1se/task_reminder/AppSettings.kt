@@ -30,5 +30,6 @@ data class AppSettings(
     val dueDateNotificationsEnabled: Boolean = true,
     val dueDateDefaultNotificationTime: String = "07:00",
     val staleTaskUpdateNotificationsEnabled: Boolean = true,
-    val lastStaleTaskUpdateNotificationAt: Long = 0L
+    val lastStaleTaskUpdateNotificationAt: Long = 0L,
+    val lastTaskActivityScanAt: Long = 0L
 )
