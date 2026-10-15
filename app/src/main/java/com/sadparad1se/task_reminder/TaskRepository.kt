@@ -127,6 +127,12 @@ class TaskRepository(context: Context) {
     /** Returns whether Android currently allows this app to post notifications. */
     fun hasNotificationPermission(): Boolean = notificationScheduler.hasNotificationPermission()
 
+    /** Posts the current stored version of a task without rescheduling any alarms. */
+    internal suspend fun postTaskNotification(fileUri: String): TaskNotificationResult {
+        val task = database.taskDao().getByFileUri(fileUri) ?: return TaskNotificationResult.TASK_NOT_FOUND
+        return TaskNotifier(appContext).postManual(task)
+    }
+
     /** Converts the persistence model into the display model used by Compose screens. */
     private fun StoredTask.toTaskListItem(): TaskListItem {
         return TaskListItem(

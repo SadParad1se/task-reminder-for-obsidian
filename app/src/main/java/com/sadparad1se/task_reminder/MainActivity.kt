@@ -17,6 +17,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.lifecycleScope
@@ -47,6 +48,7 @@ class MainActivity : ComponentActivity() {
                     var onVaultSelectedDuringOnboarding by remember { mutableStateOf<(() -> Unit)?>(null) }
                     var onNotificationPermissionGrantedDuringOnboarding by remember { mutableStateOf<(() -> Unit)?>(null) }
                     var onExactAlarmPermissionGrantedDuringOnboarding by remember { mutableStateOf<(() -> Unit)?>(null) }
+                    var pendingNotificationFileUri by rememberSaveable { mutableStateOf<String?>(null) }
 
                     val loadedSettings = settings ?: return@Surface
                     val selectedVaultName = remember(loadedSettings.vaultUris) {
@@ -70,9 +72,14 @@ class MainActivity : ComponentActivity() {
                         contract = ActivityResultContracts.RequestPermission()
                     ) { granted ->
                         hasNotificationPermission = granted || taskRepository.hasNotificationPermission()
+                        val pendingFileUri = pendingNotificationFileUri
+                        pendingNotificationFileUri = null
                         if (hasNotificationPermission) {
                             onNotificationPermissionGrantedDuringOnboarding?.invoke()
                             onNotificationPermissionGrantedDuringOnboarding = null
+                            pendingFileUri?.let { postTaskNotification(taskRepository, it) }
+                        } else if (pendingFileUri != null) {
+                            Toast.makeText(this@MainActivity, R.string.task_notifications_disabled, Toast.LENGTH_LONG).show()
                         }
                     }
                     val exactAlarmLauncher = rememberLauncherForActivityResult(
@@ -172,6 +179,14 @@ class MainActivity : ComponentActivity() {
                                     ObsidianProjectOpener.openTaskNotes(this@MainActivity, task)
                                 }
                             },
+                            onNotifyTask = { task ->
+                                if (taskRepository.hasNotificationPermission()) {
+                                    postTaskNotification(taskRepository, task.fileUri)
+                                } else if (pendingNotificationFileUri == null) {
+                                    pendingNotificationFileUri = task.fileUri
+                                    notificationPermissionLauncher.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+                                }
+                            },
                             onOpenSettings = {
                                 startActivity(Intent(this, SettingsActivity::class.java))
                             }
@@ -187,6 +202,18 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         handleTaskNotesOpenIntent(intent)
+    }
+
+    /** Posts a manual notification and explains whether Android accepted the request. */
+    private fun postTaskNotification(repository: TaskRepository, fileUri: String) {
+        lifecycleScope.launch {
+            val message = when (repository.postTaskNotification(fileUri)) {
+                TaskNotificationResult.POSTED -> R.string.task_notification_created
+                TaskNotificationResult.DISABLED -> R.string.task_notifications_disabled
+                TaskNotificationResult.TASK_NOT_FOUND -> R.string.task_notification_missing
+            }
+            Toast.makeText(this@MainActivity, message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     /** Opens the task file when a notification launches the app with vault metadata. */
