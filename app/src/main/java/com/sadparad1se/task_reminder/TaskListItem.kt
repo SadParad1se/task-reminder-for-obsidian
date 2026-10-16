@@ -24,3 +24,34 @@ data class TaskListItem(
     val tags: List<String> = emptyList(),
     val lastModified: Long? = null
 )
+
+/** Converts the persistence model into the display model used by Compose screens. */
+internal fun StoredTask.toTaskListItem(): TaskListItem {
+    return TaskListItem(
+        title = title,
+        due = due,
+        scheduled = scheduled,
+        excerpt = excerpt,
+        vaultUri = vaultUri,
+        fileUri = fileUri,
+        filePath = filePath,
+        fileName = fileName,
+        status = status,
+        statusColor = statusColor,
+        priority = priority,
+        priorityColor = priorityColor,
+        priorityWeight = priorityWeight,
+        dateCreated = dateCreated,
+        dateModified = dateModified,
+        tags = tags.splitStoredTags(),
+        lastModified = lastModified
+    )
+}
+
+/** Splits the newline-delimited tag format stored in Room into display tags. */
+private fun String.splitStoredTags(): List<String> {
+    return lineSequence()
+        .map { it.trim() }
+        .filter { it.isNotBlank() }
+        .toList()
+}

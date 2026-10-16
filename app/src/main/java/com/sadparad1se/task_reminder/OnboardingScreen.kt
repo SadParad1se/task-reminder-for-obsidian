@@ -26,7 +26,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -65,7 +64,7 @@ fun OnboardingScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(onboardingBackgroundBrush())
+            .background(appBackgroundBrush(0.9f))
     ) {
         Column(
             modifier = Modifier
@@ -300,15 +299,3 @@ private data class OnboardingPage(
 )
 
 private const val OnboardingPageCount = 7
-
-/** Matches the logo's dark glow while staying readable in light and dark mode. */
-@Composable
-private fun onboardingBackgroundBrush(): Brush {
-    return Brush.verticalGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.background,
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
-            MaterialTheme.colorScheme.background
-        )
-    )
-}

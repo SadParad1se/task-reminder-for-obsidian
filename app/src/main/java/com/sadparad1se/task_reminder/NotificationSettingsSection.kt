@@ -36,13 +36,10 @@ internal fun LazyListScope.notificationSection(
     }
 
     item {
-        val context = LocalContext.current
         NotificationTimeRow(
             label = "Scheduled date-only notification time",
             time = settings.scheduledDateDefaultNotificationTime,
-            onClick = {
-                showNotificationTimePicker(context, settings.scheduledDateDefaultNotificationTime, onScheduledDateDefaultNotificationTimeChanged)
-            }
+            onTimeSelected = onScheduledDateDefaultNotificationTimeChanged
         )
     }
 
@@ -55,13 +52,10 @@ internal fun LazyListScope.notificationSection(
     }
 
     item {
-        val context = LocalContext.current
         NotificationTimeRow(
             label = "Due date notification time",
             time = settings.dueDateDefaultNotificationTime,
-            onClick = {
-                showNotificationTimePicker(context, settings.dueDateDefaultNotificationTime, onDueDateDefaultNotificationTimeChanged)
-            }
+            onTimeSelected = onDueDateDefaultNotificationTimeChanged
         )
     }
 
@@ -104,8 +98,9 @@ private fun NotificationToggleRow(
 private fun NotificationTimeRow(
     label: String,
     time: String,
-    onClick: () -> Unit
+    onTimeSelected: (String) -> Unit
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -116,7 +111,7 @@ private fun NotificationTimeRow(
             style = MaterialTheme.typography.bodyMedium,
             modifier = Modifier.weight(1f)
         )
-        TextButton(onClick = onClick) {
+        TextButton(onClick = { showNotificationTimePicker(context, time, onTimeSelected) }) {
             Text(time)
         }
     }

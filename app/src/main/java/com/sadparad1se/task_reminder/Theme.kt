@@ -8,6 +8,7 @@ import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
@@ -83,3 +84,12 @@ fun TaskReminderTheme(
         content = content
     )
 }
+
+@Composable
+internal fun appBackgroundBrush(surfaceAlpha: Float): Brush = Brush.verticalGradient(
+    colors = listOf(
+        MaterialTheme.colorScheme.background,
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = surfaceAlpha),
+        MaterialTheme.colorScheme.background
+    )
+)

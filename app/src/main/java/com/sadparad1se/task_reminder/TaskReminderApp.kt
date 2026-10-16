@@ -1,6 +1,5 @@
 package com.sadparad1se.task_reminder
 
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
@@ -101,28 +100,11 @@ internal fun TaskReminderApp() {
                     onExactAlarmPermissionGrantedDuringOnboarding = null
                 }
             }
-            val vaultPickerLauncher = rememberLauncherForActivityResult(
-                contract = ActivityResultContracts.StartActivityForResult()
-            ) { result ->
-                val uri = result.data?.data
-                if (result.resultCode == Activity.RESULT_OK && uri != null && loadedSettings.vaultUris.none { it == uri.toString() }) {
-                    if (!isObsidianVault(context.applicationContext, uri)) {
-                        Toast.makeText(
-                            context.applicationContext,
-                            InvalidObsidianVaultMessage,
-                            Toast.LENGTH_LONG
-                        ).show()
-                        return@rememberLauncherForActivityResult
-                    }
-
-                    persistVaultReadPermission(context.applicationContext, uri)
-                    scope.launch {
-                        settingsRepository.addVaultUri(uri.toString())
-                        taskRepository.scanVault(uri.toString())
-                        onVaultSelectedDuringOnboarding?.invoke()
-                        onVaultSelectedDuringOnboarding = null
-                    }
-                }
+            val chooseVault = rememberVaultPicker(loadedSettings.vaultUris) { vaultUri ->
+                settingsRepository.addVaultUri(vaultUri)
+                taskRepository.scanVault(vaultUri)
+                onVaultSelectedDuringOnboarding?.invoke()
+                onVaultSelectedDuringOnboarding = null
             }
             LaunchedEffect(Unit) {
                 canScheduleExactAlarms = taskRepository.canScheduleExactAlarms()
@@ -138,7 +120,7 @@ internal fun TaskReminderApp() {
                     canScheduleExactAlarms = canScheduleExactAlarms,
                     onChooseVault = { onVaultSelected ->
                         onVaultSelectedDuringOnboarding = onVaultSelected
-                        vaultPickerLauncher.launch(createOpenVaultIntent())
+                        chooseVault()
                     },
                     onContinue = {
                         scope.launch { settingsRepository.completeOnboarding() }

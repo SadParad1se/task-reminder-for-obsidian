@@ -1,11 +1,9 @@
 package com.sadparad1se.task_reminder
 
 import android.Manifest
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -40,26 +38,9 @@ fun SettingsScreen() {
             )
         }
     }
-    val vaultPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult()
-    ) { result ->
-        val uri = result.data?.data
-        if (result.resultCode == Activity.RESULT_OK && uri != null && settings.vaultUris.none { it == uri.toString() }) {
-            if (!isObsidianVault(context, uri)) {
-                Toast.makeText(
-                    context,
-                    InvalidObsidianVaultMessage,
-                    Toast.LENGTH_LONG
-                ).show()
-                return@rememberLauncherForActivityResult
-            }
-
-            persistVaultReadPermission(context, uri)
-            scope.launch {
-                settingsRepository.addVaultUri(uri.toString())
-                taskRepository.scanVault(uri.toString())
-            }
-        }
+    val chooseVault = rememberVaultPicker(settings.vaultUris) { vaultUri ->
+        settingsRepository.addVaultUri(vaultUri)
+        taskRepository.scanVault(vaultUri)
     }
     val exactAlarmLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -83,13 +64,20 @@ fun SettingsScreen() {
         hasNotificationPermission = taskRepository.hasNotificationPermission()
     }
 
+    fun updateReminderSetting(update: suspend () -> Unit) {
+        scope.launch {
+            update()
+            taskRepository.rescheduleAllNotifications()
+        }
+    }
+
     SettingsScreenContent(
         settings = settings,
         selectedVaults = selectedVaults,
         scanStates = scanStates,
         canScheduleExactAlarms = canScheduleExactAlarms,
         hasNotificationPermission = hasNotificationPermission,
-        onAddVault = { vaultPickerLauncher.launch(createOpenVaultIntent()) },
+        onAddVault = chooseVault,
         onRemoveVault = { vaultUri ->
             scope.launch {
                 taskRepository.deleteVaultAppData(vaultUri)
@@ -101,28 +89,16 @@ fun SettingsScreen() {
             scope.launch { settingsRepository.updateScanFrequency(frequency) }
         },
         onScheduledDateTimeNotificationsChanged = { enabled ->
-            scope.launch {
-                settingsRepository.updateScheduledDateTimeNotificationsEnabled(enabled)
-                taskRepository.rescheduleAllNotifications()
-            }
+            updateReminderSetting { settingsRepository.updateScheduledDateTimeNotificationsEnabled(enabled) }
         },
         onScheduledDateDefaultNotificationTimeChanged = { time ->
-            scope.launch {
-                settingsRepository.updateScheduledDateDefaultNotificationTime(time)
-                taskRepository.rescheduleAllNotifications()
-            }
+            updateReminderSetting { settingsRepository.updateScheduledDateDefaultNotificationTime(time) }
         },
         onDueDateNotificationsChanged = { enabled ->
-            scope.launch {
-                settingsRepository.updateDueDateNotificationsEnabled(enabled)
-                taskRepository.rescheduleAllNotifications()
-            }
+            updateReminderSetting { settingsRepository.updateDueDateNotificationsEnabled(enabled) }
         },
         onDueDateDefaultNotificationTimeChanged = { time ->
-            scope.launch {
-                settingsRepository.updateDueDateDefaultNotificationTime(time)
-                taskRepository.rescheduleAllNotifications()
-            }
+            updateReminderSetting { settingsRepository.updateDueDateDefaultNotificationTime(time) }
         },
         onStaleTaskUpdateNotificationsChanged = { enabled ->
             scope.launch { settingsRepository.updateStaleTaskUpdateNotificationsEnabled(enabled) }

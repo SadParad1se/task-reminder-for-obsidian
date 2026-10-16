@@ -15,7 +15,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -42,7 +41,7 @@ internal fun SettingsScreenContent(
     onRequestNotificationPermission: () -> Unit
 ) {
     Scaffold(
-        modifier = Modifier.background(settingsBackgroundBrush()),
+        modifier = Modifier.background(appBackgroundBrush(0.84f)),
         containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
@@ -123,16 +122,4 @@ private fun SettingsScreenPreview() {
             onRequestNotificationPermission = {}
         )
     }
-}
-
-/** Creates the same neon-tinted backdrop used by the rest of the app. */
-@Composable
-private fun settingsBackgroundBrush(): Brush {
-    return Brush.verticalGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.background,
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.84f),
-            MaterialTheme.colorScheme.background
-        )
-    )
 }

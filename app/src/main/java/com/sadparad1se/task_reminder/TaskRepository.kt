@@ -46,6 +46,7 @@ class TaskRepository(context: Context) {
             )
             .map { tasks -> tasks.map { it.toTaskListItem() } }
     }
+
     val vaultScanStatesFlow: Flow<List<VaultScanState>> = database.vaultScanStateDao()
         .observeAll()
 
@@ -102,36 +103,4 @@ class TaskRepository(context: Context) {
         val task = database.taskDao().getByFileUri(fileUri) ?: return TaskNotificationResult.TASK_NOT_FOUND
         return TaskNotifier(appContext).postManual(task)
     }
-
-    /** Converts the persistence model into the display model used by Compose screens. */
-    private fun StoredTask.toTaskListItem(): TaskListItem {
-        return TaskListItem(
-            title = title,
-            due = due,
-            scheduled = scheduled,
-            excerpt = excerpt,
-            vaultUri = vaultUri,
-            fileUri = fileUri,
-            filePath = filePath,
-            fileName = fileName,
-            status = status,
-            statusColor = statusColor,
-            priority = priority,
-            priorityColor = priorityColor,
-            priorityWeight = priorityWeight,
-            dateCreated = dateCreated,
-            dateModified = dateModified,
-            tags = tags.splitStoredTags(),
-            lastModified = lastModified
-        )
-    }
-
-    /** Splits the newline-delimited tag format stored in Room into display tags. */
-    private fun String.splitStoredTags(): List<String> {
-        return lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-            .toList()
-    }
-
 }

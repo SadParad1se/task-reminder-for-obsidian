@@ -27,7 +27,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -62,7 +61,7 @@ fun HomeScreen(
     }
 
     Scaffold(
-        modifier = Modifier.background(appBackgroundBrush()),
+        modifier = Modifier.background(appBackgroundBrush(0.86f)),
         containerColor = Color.Transparent,
         floatingActionButtonPosition = FabPosition.Center,
         topBar = {
@@ -165,16 +164,4 @@ fun HomeScreen(
             }
         }
     }
-}
-
-/** Creates the logo-inspired app backdrop used behind list content. */
-@Composable
-private fun appBackgroundBrush(): Brush {
-    return Brush.verticalGradient(
-        colors = listOf(
-            MaterialTheme.colorScheme.background,
-            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.86f),
-            MaterialTheme.colorScheme.background
-        )
-    )
 }

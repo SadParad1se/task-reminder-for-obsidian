@@ -60,25 +60,14 @@ dependencies {
     val composeBom = platform("androidx.compose:compose-bom:2026.06.01")
     implementation(composeBom)
 
-    // Choose one of the following:
-    // Material Design 3
     implementation("androidx.compose.material3:material3")
-//    // or skip Material Design and build directly on top of foundational components
-//    implementation("androidx.compose.foundation:foundation")
-//    // or only import the main APIs for the underlying toolkit systems,
-//    // such as input and measurement/layout
-//    implementation("androidx.compose.ui:ui")
 
-    // Android Studio Preview support
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
 
-    // Optional - Add window size utils
     implementation("androidx.compose.material3.adaptive:adaptive")
 
-    // Optional - Integration with activities
     implementation("androidx.activity:activity-compose:1.13.0")
-    // Optional - Integration with ViewModels
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
     implementation("androidx.datastore:datastore-preferences:1.2.1")
@@ -87,8 +76,4 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     implementation(libs.androidx.work.runtime.ktx)
     ksp(libs.androidx.room.compiler)
-//    // Optional - Integration with LiveData
-//    implementation("androidx.compose.runtime:runtime-livedata")
-//    // Optional - Integration with RxJava
-//    implementation("androidx.compose.runtime:runtime-rxjava2")
 }
