@@ -13,7 +13,7 @@ interface TaskDao {
     @Query(
         """
         SELECT * FROM tasks
-        WHERE (:excludedPrioritiesEmpty OR lower(priority) NOT IN (:excludedPriorities))
+        WHERE (:excludedPrioritiesEmpty OR priority IS NULL OR lower(priority) NOT IN (:excludedPriorities))
             AND (
                 (:includeUndated AND scheduled IS NULL AND due IS NULL)
                 OR (:includeUpcoming AND scheduled IS NOT NULL AND datetime(scheduled) > datetime(:now))
