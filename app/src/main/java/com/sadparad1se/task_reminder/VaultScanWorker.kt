@@ -3,6 +3,7 @@ package com.sadparad1se.task_reminder
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 
 /** Background worker that scans all selected vaults using the latest saved settings. */
@@ -22,7 +23,10 @@ class VaultScanWorker(
             }
         }.fold(
             onSuccess = { Result.success() },
-            onFailure = { Result.retry() }
+            onFailure = { exception ->
+                if (exception is CancellationException) throw exception
+                Result.retry()
+            }
         )
     }
 }
