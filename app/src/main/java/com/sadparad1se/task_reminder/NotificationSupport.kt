@@ -15,12 +15,11 @@ fun Context.hasPostNotificationsPermission(): Boolean {
         PackageManager.PERMISSION_GRANTED
 }
 
-/** Creates a default-importance notification channel on Android O and newer. */
+/** Creates a default-importance notification channel. */
 fun NotificationManager.ensureDefaultChannel(
     id: String,
     name: String
 ) {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
     createNotificationChannel(
         NotificationChannel(
             id,

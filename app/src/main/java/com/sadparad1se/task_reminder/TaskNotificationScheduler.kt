@@ -6,10 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import kotlinx.coroutines.flow.first
-import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
 
 /** Schedules and cancels exact Android alarms for task reminders. */
 class TaskNotificationScheduler(
@@ -58,21 +55,13 @@ class TaskNotificationScheduler(
     /** Schedules all enabled exact reminder alarms for a task. */
     private fun schedule(task: StoredTask, settings: AppSettings) {
         val now = System.currentTimeMillis()
-        scheduleScheduledReminder(task, settings, now)
-        scheduleDueReminder(task, settings, now)
-    }
-
-    /** Schedules the TaskNotes scheduled reminder when the setting and value allow it. */
-    private fun scheduleScheduledReminder(task: StoredTask, settings: AppSettings, now: Long) {
-        val triggerAtMillis = calculateScheduledTriggerAtMillis(task.scheduled, settings, now) ?: return
-        scheduleAlarm(task.id, TaskReminderType.SCHEDULED, triggerAtMillis)
-    }
-
-    /** Schedules the due date reminder when enabled and the task has a future due date. */
-    private fun scheduleDueReminder(task: StoredTask, settings: AppSettings, now: Long) {
-        if (!settings.dueDateNotificationsEnabled) return
-        val triggerAtMillis = calculateDueTriggerAtMillis(task.due, settings, now) ?: return
-        scheduleAlarm(task.id, TaskReminderType.DUE, triggerAtMillis)
+        val zone = ZoneId.systemDefault()
+        scheduledReminderTimeMillis(task.scheduled, settings, now, zone)?.let { triggerAt ->
+            scheduleAlarm(task.id, TaskReminderType.SCHEDULED, triggerAt)
+        }
+        dueReminderTimeMillis(task.due, settings, now, zone)?.let { triggerAt ->
+            scheduleAlarm(task.id, TaskReminderType.DUE, triggerAt)
+        }
     }
 
     /** Schedules one exact alarm for one task reminder type. */
@@ -80,58 +69,17 @@ class TaskNotificationScheduler(
         alarmManager.setExactAndAllowWhileIdle(
             AlarmManager.RTC_WAKEUP,
             triggerAtMillis,
-            pendingIntent(taskId, reminderType, PendingIntent.FLAG_UPDATE_CURRENT)
+            pendingIntent(taskId, reminderType)
         )
     }
 
     /** Cancels the alarm identified by a stored task id. */
     private fun cancelTaskNotification(taskId: Long, reminderType: TaskReminderType) {
-        alarmManager.cancel(pendingIntent(taskId, reminderType, PendingIntent.FLAG_UPDATE_CURRENT))
-    }
-
-    /** Converts a scheduled TaskNotes value to a future trigger time. */
-    private fun calculateScheduledTriggerAtMillis(scheduled: String?, settings: AppSettings, now: Long): Long? {
-        if (scheduled.isNullOrBlank()) return null
-        val triggerAt = scheduled.toTaskNotesDateTimeEpochMillisOrNull()
-            ?.takeIf { settings.scheduledDateTimeNotificationsEnabled }
-            ?: calculateDateTriggerAtMillis(
-                date = scheduled,
-                time = settings.scheduledDateDefaultNotificationTime,
-                now = now
-            )
-            ?: return null
-        return triggerAt.takeIf { it > now }
-    }
-
-    /** Converts a due TaskNotes value to a future trigger time. */
-    private fun calculateDueTriggerAtMillis(due: String?, settings: AppSettings, now: Long): Long? {
-        if (due.isNullOrBlank()) return null
-        val triggerAt = due.toTaskNotesDateTimeEpochMillisOrNull()
-            ?: calculateDateTriggerAtMillis(
-                date = due,
-                time = settings.dueDateDefaultNotificationTime,
-                now = now
-            )
-            ?: return null
-        return triggerAt.takeIf { it > now }
-    }
-
-    /** Combines an ISO date with a user-selected notification time. */
-    private fun calculateDateTriggerAtMillis(date: String?, time: String, now: Long): Long? {
-        if (date.isNullOrBlank()) return null
-        val triggerAt = runCatching {
-            LocalDateTime.of(
-                LocalDate.parse(date, DateTimeFormatter.ISO_LOCAL_DATE),
-                parseNotificationTime(time)
-            ).atZone(ZoneId.systemDefault())
-                .toInstant()
-                .toEpochMilli()
-        }.getOrNull() ?: return null
-        return triggerAt.takeIf { it > now }
+        alarmManager.cancel(pendingIntent(taskId, reminderType))
     }
 
     /** Builds the broadcast pending intent used by AlarmManager. */
-    private fun pendingIntent(taskId: Long, reminderType: TaskReminderType, flags: Int): PendingIntent {
+    private fun pendingIntent(taskId: Long, reminderType: TaskReminderType): PendingIntent {
         val intent = Intent(context, TaskNotificationReceiver::class.java).apply {
             action = "${context.packageName}.TASK_NOTIFICATION.${reminderType.storageValue}.$taskId"
             putExtra(TaskNotificationReceiver.ExtraTaskId, taskId)
@@ -141,7 +89,7 @@ class TaskNotificationScheduler(
             context,
             taskReminderStableId(taskId, reminderType),
             intent,
-            flags or PendingIntent.FLAG_IMMUTABLE
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
     }
 }

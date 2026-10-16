@@ -29,14 +29,30 @@ fun String.toTaskNotesEpochMillisOrNull(zone: ZoneId = ZoneId.systemDefault()): 
 /** Parses TaskNotes local or offset date-time values into epoch milliseconds when possible. */
 fun String.toTaskNotesDateTimeEpochMillisOrNull(zone: ZoneId = ZoneId.systemDefault()): Long? {
     return runCatching {
-        OffsetDateTime.parse(this, DateTimeFormatter.ISO_OFFSET_DATE_TIME)
-            .atZoneSameInstant(zone)
-            .toInstant()
-            .toEpochMilli()
+        parseOffsetDateTimeOrNull()
+            ?.atZoneSameInstant(zone)
+            ?.toInstant()
+            ?.toEpochMilli()
     }.getOrNull() ?: runCatching {
-        LocalDateTime.parse(this, DateTimeFormatter.ISO_LOCAL_DATE_TIME)
-            .atZone(zone)
-            .toInstant()
-            .toEpochMilli()
+        parseLocalDateTimeOrNull()
+            ?.atZone(zone)
+            ?.toInstant()
+            ?.toEpochMilli()
     }.getOrNull()
 }
+
+/** Parses display dates without shifting local times through daylight-saving transitions. */
+internal fun String.toTaskNotesLocalDateTimeOrNull(
+    dateOnlyTime: LocalTime = LocalTime.MIDNIGHT,
+    zone: ZoneId = ZoneId.systemDefault()
+): LocalDateTime? {
+    return parseLocalDateTimeOrNull()
+        ?: runCatching { parseOffsetDateTimeOrNull()?.atZoneSameInstant(zone)?.toLocalDateTime() }.getOrNull()
+        ?: runCatching { LocalDate.parse(this, DateTimeFormatter.ISO_LOCAL_DATE).atTime(dateOnlyTime) }.getOrNull()
+}
+
+private fun String.parseLocalDateTimeOrNull(): LocalDateTime? =
+    runCatching { LocalDateTime.parse(this, DateTimeFormatter.ISO_LOCAL_DATE_TIME) }.getOrNull()
+
+private fun String.parseOffsetDateTimeOrNull(): OffsetDateTime? =
+    runCatching { OffsetDateTime.parse(this, DateTimeFormatter.ISO_OFFSET_DATE_TIME) }.getOrNull()
