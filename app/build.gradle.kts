@@ -16,8 +16,8 @@ android {
         applicationId = "com.sadparad1se.task_reminder"
         minSdk = 30
         targetSdk = 36
-        versionCode = 4
-        versionName = "1.2.1"
+        versionCode = 5
+        versionName = "1.3.0"
     }
 
     buildTypes {
