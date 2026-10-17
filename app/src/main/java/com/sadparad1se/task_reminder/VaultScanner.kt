@@ -22,16 +22,19 @@ class VaultScanner(
     private val taskNotesSettingsCache = mutableMapOf<String, CachedTaskNotesSettings>()
 
     /** Scans one vault URI, updating scan state and notifying the user if the scan fails. */
-    suspend fun scanVault(vaultUri: String): VaultScanResult = withContext(Dispatchers.IO) {
+    suspend fun scanVault(
+        vaultUri: String,
+        configurationFolder: String = DefaultObsidianConfigurationFolder
+    ): VaultScanResult = withContext(Dispatchers.IO) {
         val scanStartedAt = now()
         try {
             val previousScanAt = vaultScanStateDao.get(vaultUri)?.lastScannedAt ?: 0L
             val vaultDocument = DocumentFile.fromTreeUri(context, Uri.parse(vaultUri))
                 ?: throw IllegalStateException("Vault folder cannot be opened")
-            if (!vaultDocument.isObsidianVaultRoot()) {
-                throw IllegalStateException("Selected folder is not an Obsidian vault")
+            if (!vaultDocument.isObsidianVaultRoot(configurationFolder)) {
+                throw IllegalStateException("Configuration folder cannot be opened: $configurationFolder")
             }
-            val loadedSettings = loadTaskNotesSettings(vaultUri, vaultDocument)
+            val loadedSettings = loadTaskNotesSettings(vaultUri, vaultDocument, configurationFolder)
             val tasksFolderDocument = vaultDocument.findDirectoryByRelativePath(loadedSettings.settings.tasksFolder)
                 ?: throw IllegalStateException("TaskNotes tasksFolder cannot be opened")
             val lastScannedAt = if (loadedSettings.forceFullRescan) {
@@ -89,12 +92,19 @@ class VaultScanner(
     }
 
     /** Loads TaskNotes settings, reusing the cached copy when the settings file timestamp is unchanged. */
-    private fun loadTaskNotesSettings(vaultUri: String, vaultDocument: DocumentFile): LoadedTaskNotesSettings {
-        val settingsFile = vaultDocument.findFileByRelativePath(TaskNotesSettingsPath)
+    private fun loadTaskNotesSettings(
+        vaultUri: String,
+        vaultDocument: DocumentFile,
+        configurationFolder: String
+    ): LoadedTaskNotesSettings {
+        val settingsFile = vaultDocument.findFileByRelativePath("$configurationFolder/plugins/tasknotes/data.json")
             ?: throw IllegalStateException("TaskNotes data.json cannot be opened")
         val lastModified = queryLastModifiedMillis(settingsFile.uri)
         val cachedSettings = taskNotesSettingsCache[vaultUri]
-        if (lastModified != null && cachedSettings?.lastModified == lastModified) {
+        if (
+            lastModified != null && cachedSettings?.lastModified == lastModified &&
+            cachedSettings.settingsFileUri == settingsFile.uri.toString()
+        ) {
             return LoadedTaskNotesSettings(
                 settings = cachedSettings.settings,
                 forceFullRescan = false
@@ -105,7 +115,7 @@ class VaultScanner(
             readDocumentText(settingsFile.uri) ?: throw IllegalStateException("TaskNotes data.json cannot be read")
         )
         if (lastModified != null) {
-            taskNotesSettingsCache[vaultUri] = CachedTaskNotesSettings(settings, lastModified)
+            taskNotesSettingsCache[vaultUri] = CachedTaskNotesSettings(settings, lastModified, settingsFile.uri.toString())
         } else {
             taskNotesSettingsCache.remove(vaultUri)
         }
@@ -265,14 +275,11 @@ class VaultScanner(
         return findFileByRelativePath(relativePath)?.takeIf { it.isDirectory }
     }
 
-    private companion object {
-        const val TaskNotesSettingsPath = ".obsidian/plugins/tasknotes/data.json"
-    }
-
     /** Parsed TaskNotes settings cached with the provider-reported settings file timestamp. */
     private data class CachedTaskNotesSettings(
         val settings: TaskNotesSettings,
-        val lastModified: Long
+        val lastModified: Long,
+        val settingsFileUri: String
     )
 
     /** TaskNotes settings returned for a scan and whether tasks must be fully rebuilt. */

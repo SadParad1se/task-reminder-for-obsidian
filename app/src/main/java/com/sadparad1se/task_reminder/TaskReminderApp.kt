@@ -41,11 +41,10 @@ internal fun TaskReminderApp() {
             var includedTimeBuckets by remember { mutableStateOf(TaskTimeBucket.entries.toSet()) }
             var canScheduleExactAlarms by remember { mutableStateOf(taskRepository.canScheduleExactAlarms()) }
             var hasNotificationPermission by remember { mutableStateOf(taskRepository.hasNotificationPermission()) }
-            var onVaultSelectedDuringOnboarding by remember { mutableStateOf<(() -> Unit)?>(null) }
             var onNotificationPermissionGrantedDuringOnboarding by remember { mutableStateOf<(() -> Unit)?>(null) }
             var onExactAlarmPermissionGrantedDuringOnboarding by remember { mutableStateOf<(() -> Unit)?>(null) }
             var pendingNotificationFileUri by rememberSaveable { mutableStateOf<String?>(null) }
-            var isScanning by remember { mutableStateOf(false) }
+            val scanState = remember { ForegroundScanState() }
             val notificationSuccessCounts = remember { mutableStateMapOf<String, Long>() }
             val onNotificationPosted: (String) -> Unit = { fileUri ->
                 notificationSuccessCounts[fileUri] = (notificationSuccessCounts[fileUri] ?: 0L) + 1L
@@ -60,10 +59,13 @@ internal fun TaskReminderApp() {
             }
 
             val loadedSettings = settings ?: return@Surface
-            val selectedVaultName = remember(loadedSettings.vaultUris) {
-                loadedSettings.vaultUris.firstOrNull()
-                    ?.let { vaultUri -> getVaultDisplayName(context.applicationContext, Uri.parse(vaultUri)) }
+            val selectedVaultUri = loadedSettings.vaultUris.firstOrNull()
+            val selectedVaultName = remember(selectedVaultUri) {
+                selectedVaultUri?.let { getVaultDisplayName(context.applicationContext, Uri.parse(it)) }
             }
+            val selectedConfigurationFolder = selectedVaultUri
+                ?.let { loadedSettings.vaultConfigurationFolders.getValue(it) }
+                ?: DefaultObsidianConfigurationFolder
             val taskFlow = remember(excludedPriorities, includedTimeBuckets) {
                 taskRepository.tasksFlow(
                     excludedPriorities = excludedPriorities,
@@ -100,11 +102,17 @@ internal fun TaskReminderApp() {
                     onExactAlarmPermissionGrantedDuringOnboarding = null
                 }
             }
-            val chooseVault = rememberVaultPicker(loadedSettings.vaultUris) { vaultUri ->
-                settingsRepository.addVaultUri(vaultUri)
-                taskRepository.scanVault(vaultUri)
-                onVaultSelectedDuringOnboarding?.invoke()
-                onVaultSelectedDuringOnboarding = null
+            val chooseVault = rememberVaultPicker(loadedSettings.vaultUris) { vaultUri, configurationFolder ->
+                scanState.run {
+                    settingsRepository.addVaultUri(vaultUri, configurationFolder)
+                    context.showVaultScanFeedback(taskRepository.scanVault(vaultUri))
+                }
+            }
+            val chooseConfigurationFolder = rememberConfigurationFolderPicker { vaultUri, folder ->
+                scanState.run {
+                    settingsRepository.updateVaultConfigurationFolder(vaultUri, folder)
+                    context.showVaultScanFeedback(taskRepository.scanVault(vaultUri))
+                }
             }
             LaunchedEffect(Unit) {
                 canScheduleExactAlarms = taskRepository.canScheduleExactAlarms()
@@ -116,11 +124,15 @@ internal fun TaskReminderApp() {
             if (!loadedSettings.onboardingCompleted) {
                 OnboardingScreen(
                     selectedVaultName = selectedVaultName,
+                    selectedConfigurationFolder = selectedConfigurationFolder,
+                    isScanning = scanState.isScanning,
                     hasNotificationPermission = hasNotificationPermission,
                     canScheduleExactAlarms = canScheduleExactAlarms,
-                    onChooseVault = { onVaultSelected ->
-                        onVaultSelectedDuringOnboarding = onVaultSelected
-                        chooseVault()
+                    onChooseVault = { if (!scanState.isScanning) chooseVault() },
+                    onChooseConfigurationFolder = {
+                        if (!scanState.isScanning) {
+                            selectedVaultUri?.let { chooseConfigurationFolder(it, selectedConfigurationFolder) }
+                        }
                     },
                     onContinue = {
                         scope.launch { settingsRepository.completeOnboarding() }
@@ -180,19 +192,16 @@ internal fun TaskReminderApp() {
                         }
                     },
                     onRescan = {
-                        if (!isScanning && loadedSettings.vaultUris.isNotEmpty()) {
-                            isScanning = true
+                        if (loadedSettings.vaultUris.isNotEmpty()) {
                             scope.launch {
-                                try {
-                                    taskRepository.rescanVaults()
-                                } finally {
-                                    isScanning = false
+                                scanState.run {
+                                    context.showVaultScanFeedback(taskRepository.rescanVaults())
                                 }
                             }
                         }
                     },
                     canRescan = loadedSettings.vaultUris.isNotEmpty(),
-                    isScanning = isScanning,
+                    isScanning = scanState.isScanning,
                     notificationSuccessCounts = notificationSuccessCounts.toMap(),
                     onOpenSettings = {
                         context.startActivity(Intent(context, SettingsActivity::class.java))

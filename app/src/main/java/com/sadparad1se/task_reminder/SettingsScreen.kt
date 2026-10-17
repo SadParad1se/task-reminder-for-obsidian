@@ -26,21 +26,31 @@ fun SettingsScreen() {
     val settings by settingsRepository.settingsFlow.collectAsStateWithLifecycle(initialValue = AppSettings())
     val scanStates by taskRepository.vaultScanStatesFlow.collectAsStateWithLifecycle(initialValue = emptyList())
     val scope = rememberCoroutineScope()
+    val scanState = remember { ForegroundScanState() }
     var canScheduleExactAlarms by remember { mutableStateOf(taskRepository.canScheduleExactAlarms()) }
     var hasNotificationPermission by remember { mutableStateOf(taskRepository.hasNotificationPermission()) }
 
-    val selectedVaults = remember(settings.vaultUris) {
+    val selectedVaults = remember(settings.vaultUris, settings.vaultConfigurationFolders) {
         settings.vaultUris.map { vaultUri ->
             val uri = Uri.parse(vaultUri)
             VaultSelection(
                 uri = uri,
-                displayName = getVaultDisplayName(context, uri)
+                displayName = getVaultDisplayName(context, uri),
+                configurationFolder = settings.vaultConfigurationFolders.getValue(vaultUri)
             )
         }
     }
-    val chooseVault = rememberVaultPicker(settings.vaultUris) { vaultUri ->
-        settingsRepository.addVaultUri(vaultUri)
-        taskRepository.scanVault(vaultUri)
+    val chooseVault = rememberVaultPicker(settings.vaultUris) { vaultUri, configurationFolder ->
+        scanState.run {
+            settingsRepository.addVaultUri(vaultUri, configurationFolder)
+            context.showVaultScanFeedback(taskRepository.scanVault(vaultUri))
+        }
+    }
+    val chooseConfigurationFolder = rememberConfigurationFolderPicker { vaultUri, folder ->
+        scanState.run {
+            settingsRepository.updateVaultConfigurationFolder(vaultUri, folder)
+            context.showVaultScanFeedback(taskRepository.scanVault(vaultUri))
+        }
     }
     val exactAlarmLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
@@ -75,16 +85,28 @@ fun SettingsScreen() {
         settings = settings,
         selectedVaults = selectedVaults,
         scanStates = scanStates,
+        isScanning = scanState.isScanning,
         canScheduleExactAlarms = canScheduleExactAlarms,
         hasNotificationPermission = hasNotificationPermission,
-        onAddVault = chooseVault,
-        onRemoveVault = { vaultUri ->
-            scope.launch {
-                taskRepository.deleteVaultAppData(vaultUri)
-                settingsRepository.removeVaultUri(vaultUri)
+        onAddVault = { if (!scanState.isScanning) chooseVault() },
+        onChooseConfigurationFolder = { vaultUri ->
+            if (!scanState.isScanning) {
+                chooseConfigurationFolder(vaultUri, settings.vaultConfigurationFolders.getValue(vaultUri))
             }
         },
-        onScanNow = { scope.launch { taskRepository.rescanVaults() } },
+        onRemoveVault = { vaultUri ->
+            if (!scanState.isScanning) {
+                scope.launch {
+                    taskRepository.deleteVaultAppData(vaultUri)
+                    settingsRepository.removeVaultUri(vaultUri)
+                }
+            }
+        },
+        onScanNow = {
+            scope.launch {
+                scanState.run { context.showVaultScanFeedback(taskRepository.rescanVaults()) }
+            }
+        },
         onScanFrequencySelected = { frequency ->
             scope.launch { settingsRepository.updateScanFrequency(frequency) }
         },

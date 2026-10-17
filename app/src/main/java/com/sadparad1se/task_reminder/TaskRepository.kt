@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -57,7 +58,11 @@ class TaskRepository(context: Context) {
 
     /** Scans each selected vault sequentially. */
     suspend fun scanVaults(vaultUris: List<String>): Boolean {
-        return taskActivityMonitor.scanVaults(vaultUris, scanner::scanVault, notificationScheduler::rescheduleAll)
+        return taskActivityMonitor.scanVaults(vaultUris, { vaultUri ->
+            val configurationFolder = settingsRepository.settingsFlow.first()
+                .vaultConfigurationFolders.getValue(vaultUri)
+            scanner.scanVault(vaultUri, configurationFolder)
+        }, notificationScheduler::rescheduleAll)
     }
 
     /** Manually scans all selected vaults and restarts background timing after success. */

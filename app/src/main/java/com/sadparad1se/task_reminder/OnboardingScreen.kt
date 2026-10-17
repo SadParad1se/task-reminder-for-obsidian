@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -35,9 +37,12 @@ import kotlinx.coroutines.launch
 @Composable
 fun OnboardingScreen(
     selectedVaultName: String?,
+    selectedConfigurationFolder: String,
+    isScanning: Boolean,
     hasNotificationPermission: Boolean,
     canScheduleExactAlarms: Boolean,
-    onChooseVault: (onVaultSelected: () -> Unit) -> Unit,
+    onChooseVault: () -> Unit,
+    onChooseConfigurationFolder: () -> Unit,
     onContinue: () -> Unit,
     onRequestNotifications: (onPermissionGranted: () -> Unit) -> Unit,
     onOpenExactAlarmSettings: (onPermissionGranted: () -> Unit) -> Unit,
@@ -76,7 +81,28 @@ fun OnboardingScreen(
                 state = pagerState,
                 modifier = Modifier.weight(1f)
             ) { pageIndex ->
-                OnboardingPageContent(page = pages[pageIndex])
+                OnboardingPageContent(
+                    page = pages[pageIndex],
+                    actionEnabled = pageIndex != OnboardingVaultPageIndex || !isScanning
+                ) {
+                    if (pageIndex == OnboardingVaultPageIndex) {
+                        TextButton(
+                            onClick = onChooseConfigurationFolder,
+                            enabled = selectedVaultName != null && !isScanning,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            if (isScanning) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 2.dp
+                                )
+                                Spacer(Modifier.width(8.dp))
+                            }
+                            Text("Configuration folder: $selectedConfigurationFolder")
+                        }
+                    }
+                }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -105,7 +131,7 @@ private fun onboardingPages(
     selectedVaultName: String?,
     hasNotificationPermission: Boolean,
     canScheduleExactAlarms: Boolean,
-    onChooseVault: (onVaultSelected: () -> Unit) -> Unit,
+    onChooseVault: () -> Unit,
     onRequestNotifications: (onPermissionGranted: () -> Unit) -> Unit,
     onOpenExactAlarmSettings: (onPermissionGranted: () -> Unit) -> Unit,
     onOpenBatterySettings: () -> Unit,
@@ -127,7 +153,7 @@ private fun onboardingPages(
             body = "Choose the first Obsidian vault folder now.",
             status = selectedVaultName?.let { "Vault selected: $it" } ?: "No vault selected yet.",
             actionLabel = "Choose Obsidian vault",
-            onAction = { onChooseVault(onSuccessfulAction) },
+            onAction = onChooseVault,
             footer = "You can choose or change a vault later in Settings."
         ),
         OnboardingPage(
@@ -164,7 +190,11 @@ private fun onboardingPages(
 
 /** Displays title, body, status, and page-specific action for one carousel page. */
 @Composable
-private fun OnboardingPageContent(page: OnboardingPage) {
+private fun OnboardingPageContent(
+    page: OnboardingPage,
+    actionEnabled: Boolean,
+    footerContent: @Composable () -> Unit
+) {
     Surface(
         modifier = Modifier
             .fillMaxSize()
@@ -177,54 +207,59 @@ private fun OnboardingPageContent(page: OnboardingPage) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 18.dp, vertical = 24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
+                .padding(horizontal = 18.dp, vertical = 24.dp)
         ) {
-            Image(
-                painter = painterResource(id = R.mipmap.ic_launcher),
-                contentDescription = null,
-                modifier = Modifier.size(86.dp)
-            )
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = page.title,
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = page.body,
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-            page.status?.let { status ->
+            Column(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Image(
+                    painter = painterResource(id = R.mipmap.ic_launcher),
+                    contentDescription = null,
+                    modifier = Modifier.size(86.dp)
+                )
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(
+                    text = page.title,
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 Text(
-                    text = status,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary,
+                    text = page.body,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                page.status?.let { status ->
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        text = status,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.secondary,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+                page.actionLabel?.let { actionLabel ->
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Button(enabled = actionEnabled, onClick = { page.onAction?.invoke() }) {
+                        Text(actionLabel)
+                    }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+                Text(
+                    text = page.footer,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
-            page.actionLabel?.let { actionLabel ->
-                Spacer(modifier = Modifier.height(20.dp))
-                Button(onClick = { page.onAction?.invoke() }) {
-                    Text(actionLabel)
-                }
-            }
-            Spacer(modifier = Modifier.height(20.dp))
-            Text(
-                text = page.footer,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            footerContent()
         }
     }
 }
@@ -299,3 +334,4 @@ private data class OnboardingPage(
 )
 
 private const val OnboardingPageCount = 7
+private const val OnboardingVaultPageIndex = 2

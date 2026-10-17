@@ -4,14 +4,18 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
@@ -29,7 +33,9 @@ import kotlin.math.roundToInt
 /** Adds the selected vault list section to the settings screen. */
 internal fun LazyListScope.vaultSection(
     selectedVaults: List<VaultSelection>,
-    onRemoveVault: (String) -> Unit
+    onRemoveVault: (String) -> Unit,
+    onChooseConfigurationFolder: (String) -> Unit,
+    enabled: Boolean
 ) {
     item { SettingsSectionTitle("Obsidian vaults") }
 
@@ -42,7 +48,7 @@ internal fun LazyListScope.vaultSection(
         }
     } else {
         items(selectedVaults) { vault ->
-            VaultRow(vault, onRemoveVault)
+            VaultRow(vault, onRemoveVault, onChooseConfigurationFolder, enabled)
         }
     }
 }
@@ -51,7 +57,9 @@ internal fun LazyListScope.vaultSection(
 @Composable
 private fun VaultRow(
     vault: VaultSelection,
-    onRemoveVault: (String) -> Unit
+    onRemoveVault: (String) -> Unit,
+    onChooseConfigurationFolder: (String) -> Unit,
+    enabled: Boolean
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -62,24 +70,31 @@ private fun VaultRow(
         ),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f))
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
-            Text(
-                text = vault.displayName,
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f)
-            )
-            TextButton(
-                onClick = {
-                    onRemoveVault(vault.uri.toString())
-                }
+            Row(
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Remove")
+                Text(
+                    text = vault.displayName,
+                    style = MaterialTheme.typography.bodyMedium,
+                    modifier = Modifier.weight(1f)
+                )
+                TextButton(
+                    enabled = enabled,
+                    onClick = {
+                        onRemoveVault(vault.uri.toString())
+                    }
+                ) {
+                    Text("Remove")
+                }
+            }
+            TextButton(enabled = enabled, onClick = { onChooseConfigurationFolder(vault.uri.toString()) }) {
+                Text("Configuration folder: ${vault.configurationFolder}")
             }
         }
     }
@@ -89,6 +104,7 @@ private fun VaultRow(
 @Composable
 internal fun VaultActionRow(
     scanEnabled: Boolean,
+    isScanning: Boolean,
     onAddVault: () -> Unit,
     onScanNow: () -> Unit
 ) {
@@ -98,15 +114,24 @@ internal fun VaultActionRow(
     ) {
         Button(
             onClick = onAddVault,
+            enabled = !isScanning,
             modifier = Modifier.weight(1f)
         ) {
             Text("Add Vault")
         }
         Button(
             onClick = onScanNow,
-            enabled = scanEnabled,
+            enabled = scanEnabled && !isScanning,
             modifier = Modifier.weight(1f)
         ) {
+            if (isScanning) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(24.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 2.dp
+                )
+                Spacer(Modifier.width(8.dp))
+            }
             Text("Scan now")
         }
     }

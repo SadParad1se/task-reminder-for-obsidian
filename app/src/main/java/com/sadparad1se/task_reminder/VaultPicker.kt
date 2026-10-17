@@ -1,7 +1,7 @@
 package com.sadparad1se.task_reminder
 
 import android.app.Activity
-import android.widget.Toast
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -13,10 +13,14 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun rememberVaultPicker(
     selectedVaultUris: List<String>,
-    onVaultSelected: suspend (String) -> Unit
+    onVaultSelected: suspend (String, String) -> Unit
 ): () -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val chooseConfigurationFolder = rememberConfigurationFolderPicker { vaultUri, folder ->
+        persistVaultReadPermission(context, Uri.parse(vaultUri))
+        onVaultSelected(vaultUri, folder)
+    }
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -25,12 +29,12 @@ internal fun rememberVaultPicker(
             return@rememberLauncherForActivityResult
         }
         if (!isObsidianVault(context, uri)) {
-            Toast.makeText(context, InvalidObsidianVaultMessage, Toast.LENGTH_LONG).show()
+            chooseConfigurationFolder(uri.toString(), null)
             return@rememberLauncherForActivityResult
         }
 
         persistVaultReadPermission(context, uri)
-        scope.launch { onVaultSelected(uri.toString()) }
+        scope.launch { onVaultSelected(uri.toString(), DefaultObsidianConfigurationFolder) }
     }
     return { launcher.launch(createOpenVaultIntent()) }
 }

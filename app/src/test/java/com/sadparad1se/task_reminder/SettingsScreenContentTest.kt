@@ -5,7 +5,12 @@ import android.content.DialogInterface
 import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.semantics.ProgressBarRangeInfo
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.hasProgressBarRangeInfo
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isToggleable
@@ -30,6 +35,7 @@ class SettingsScreenContentTest {
     @get:Rule
     val compose = createEmptyComposeRule()
     private val calls = mutableListOf<String>()
+    private val isScanning = mutableStateOf(false)
     private val vault = VaultSelection(Uri.parse("content://vault/example"), "Example")
 
     @Test
@@ -41,8 +47,32 @@ class SettingsScreenContentTest {
     }
 
     @Test
+    fun configurationFolderControlKeepsTheSelectedVaultIdentity() = withSettings(listOf(vault)) {
+        compose.onNodeWithText("Configuration folder: .obsidian").performClick()
+        assertEquals(listOf("configuration:${vault.uri}"), calls)
+    }
+
+    @Test
     fun scanningIsDisabledWithoutVaults() = withSettings(emptyList()) {
         compose.onNodeWithText("Scan now").assertIsNotEnabled()
+    }
+
+    @Test
+    fun loadingShowsProgressAndDisablesVaultActionsUntilFinished() = withSettings(listOf(vault)) {
+        compose.runOnIdle { isScanning.value = true }
+        compose.onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate), useUnmergedTree = true)
+            .assertIsDisplayed()
+        for (label in listOf("Add Vault", "Remove", "Configuration folder: .obsidian", "Scan now")) {
+            compose.onNodeWithText(label).assertIsNotEnabled()
+        }
+        compose.runOnIdle { isScanning.value = false }
+        compose.onNode(hasProgressBarRangeInfo(ProgressBarRangeInfo.Indeterminate), useUnmergedTree = true)
+            .assertDoesNotExist()
+        for (label in listOf("Add Vault", "Remove", "Configuration folder: .obsidian", "Scan now")) {
+            compose.onNodeWithText(label).assertIsEnabled()
+        }
+        compose.onNodeWithText("Scan now").performClick()
+        assertEquals(listOf("scan"), calls)
     }
 
     @Test
@@ -69,10 +99,12 @@ class SettingsScreenContentTest {
                         settings = AppSettings(vaultUris = vaults.map { it.uri.toString() }),
                         selectedVaults = vaults,
                         scanStates = emptyList(),
+                        isScanning = isScanning.value,
                         canScheduleExactAlarms = true,
                         hasNotificationPermission = true,
                         onAddVault = { calls.add("add") },
                         onRemoveVault = { calls.add("remove:$it") },
+                        onChooseConfigurationFolder = { calls.add("configuration:$it") },
                         onScanNow = { calls.add("scan") },
                         onScanFrequencySelected = {},
                         onScheduledDateTimeNotificationsChanged = { calls.add("scheduled:$it") },

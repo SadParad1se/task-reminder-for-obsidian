@@ -23,6 +23,7 @@ enum class ScanFrequency(
 /** Snapshot of user settings loaded from DataStore. */
 data class AppSettings(
     val vaultUris: List<String> = emptyList(),
+    val vaultConfigurationFolders: Map<String, String> = emptyMap(),
     val scanFrequency: ScanFrequency = ScanFrequency.EVERY_HOUR,
     val onboardingCompleted: Boolean = false,
     val scheduledDateTimeNotificationsEnabled: Boolean = true,

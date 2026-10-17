@@ -7,4 +7,5 @@
     <string name="task_notification_created">Notification created.</string>
     <string name="task_notifications_disabled">Notifications are disabled. Enable Task notifications in Android notification settings.</string>
     <string name="task_notification_missing">This task is no longer available. Refresh your task list and try again.</string>
+    <string name="vault_scan_failed">Vault scan failed. Check the configuration folder and TaskNotes settings.</string>
 </resources>

@@ -10,11 +10,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.ActivityResultRegistry
 import androidx.activity.result.ActivityResultRegistryOwner
 import androidx.activity.result.contract.ActivityResultContract
+import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.junit4.v2.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.core.app.ActivityOptionsCompat
@@ -40,6 +42,7 @@ class VaultPickerTest {
     private val uri = DocumentsContract.buildTreeDocumentUri("vault.picker", "root")
     private val selectedVaults = mutableStateOf(emptyList<String>())
     private val selections = mutableListOf<String>()
+    private val configurationFolders = mutableListOf<String>()
     private var requestCode = 0
     private lateinit var pickerIntent: Intent
     private val registry = object : ActivityResultRegistry() {
@@ -77,6 +80,7 @@ class VaultPickerTest {
         registerVault(valid = false)
         select(Activity.RESULT_OK, Intent().setData(uri))
         assertTrue(selections.isEmpty())
+        compose.waitUntil { ShadowToast.getTextOfLatestToast() != null }
         assertEquals(InvalidObsidianVaultMessage, ShadowToast.getTextOfLatestToast())
     }
 
@@ -85,10 +89,55 @@ class VaultPickerTest {
         registerVault(valid = true)
         select(Activity.RESULT_OK, Intent().setData(uri))
         assertEquals(listOf(uri.toString()), selections)
+        assertEquals(listOf(".obsidian"), configurationFolders)
         assertEquals(Intent.ACTION_OPEN_DOCUMENT_TREE, pickerIntent.action)
         assertTrue(pickerIntent.flags and Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
         assertEquals(0, pickerIntent.flags and Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
         assertTrue(pickerIntent.flags and Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION != 0)
+    }
+
+    @Test
+    fun missingDefaultListsAllDirectoriesAndWaitsForManualSelection() = withPicker {
+        val root = registerVault(valid = false)
+        File(root, ".obsidianHandy1").mkdirs()
+        File(root, "Phone settings").mkdirs()
+        File(root, "Tasks").mkdirs()
+        File(root, "note.md").writeText("Not a directory")
+        select(Activity.RESULT_OK, Intent().setData(uri))
+        compose.waitUntil { compose.onAllNodesWithText("Configuration folder").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(".obsidianHandy1").assertExists()
+        compose.onNodeWithText("Tasks").assertExists()
+        compose.onNodeWithText("note.md").assertDoesNotExist()
+        assertTrue(selections.isEmpty())
+        compose.onNodeWithText("Phone settings").performClick()
+        compose.waitUntil { selections.isNotEmpty() }
+        assertEquals(listOf(uri.toString()), selections)
+        assertEquals(listOf("Phone settings"), configurationFolders)
+    }
+
+    @Test
+    fun existingVaultCanOverrideDefaultAndReturnToIt() = withPicker {
+        val root = registerVault(valid = true)
+        File(root, ".obsidianHandy1").mkdirs()
+        compose.onNodeWithText("Change configuration").performClick()
+        compose.waitUntil { compose.onAllNodesWithText(".obsidian (current)").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(".obsidianHandy1").performClick()
+        compose.waitUntil { configurationFolders.size == 1 }
+        compose.onNodeWithText("Change configuration").performClick()
+        compose.waitUntil { compose.onAllNodesWithText(".obsidianHandy1 (current)").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText(".obsidian").performClick()
+        compose.waitUntil { configurationFolders.size == 2 }
+        assertEquals(listOf(".obsidianHandy1", ".obsidian"), configurationFolders)
+    }
+
+    @Test
+    fun cancelingCustomConfigurationDoesNotAddVault() = withPicker {
+        File(registerVault(valid = false), ".obsidianHandy1").mkdirs()
+        select(Activity.RESULT_OK, Intent().setData(uri))
+        compose.waitUntil { compose.onAllNodesWithText("Cancel").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("Cancel").performClick()
+        assertTrue(selections.isEmpty())
+        assertTrue(configurationFolders.isEmpty())
     }
 
     private fun withPicker(check: () -> Unit) {
@@ -96,8 +145,19 @@ class VaultPickerTest {
             controller.get().setContent {
                 CompositionLocalProvider(LocalActivityResultRegistryOwner provides registryOwner) {
                     TaskReminderTheme {
-                        val chooseVault = rememberVaultPicker(selectedVaults.value) { selections.add(it) }
-                        Button(onClick = chooseVault) { Text("Choose vault") }
+                        Column {
+                            val chooseVault = rememberVaultPicker(selectedVaults.value) { vaultUri, folder ->
+                                selections.add(vaultUri)
+                                configurationFolders.add(folder)
+                            }
+                            Button(onClick = chooseVault) { Text("Choose vault") }
+                            val changeConfiguration = rememberConfigurationFolderPicker { _, folder ->
+                                configurationFolders.add(folder)
+                            }
+                            Button(onClick = {
+                                changeConfiguration(uri.toString(), configurationFolders.lastOrNull() ?: ".obsidian")
+                            }) { Text("Change configuration") }
+                        }
                     }
                 }
             }
@@ -111,7 +171,7 @@ class VaultPickerTest {
         compose.waitForIdle()
     }
 
-    private fun registerVault(valid: Boolean) {
+    private fun registerVault(valid: Boolean): File {
         val root = File(context.cacheDir, "picker-vault").apply { mkdirs() }
         if (valid) File(root, ".obsidian").mkdirs()
         val provider = TestVaultDocumentsProvider(root)
@@ -121,5 +181,6 @@ class VaultPickerTest {
             grantUriPermissions = true
         })
         ShadowContentResolver.registerProviderInternal("vault.picker", provider)
+        return root
     }
 }

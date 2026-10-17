@@ -65,6 +65,46 @@ class VaultScannerActivityTest {
     }
 
     @Test
+    fun customConfigurationWorksWithoutDefaultDirectory() = runBlocking {
+        File(root, ".obsidian").renameTo(File(root, ".obsidianHandy1"))
+        write("Tasks/task.md", taskText())
+        assertTrue(scanner.scanVault(uri, ".obsidianHandy1").succeeded)
+        assertEquals(1, database.taskDao().getAllTasks().size)
+    }
+
+    @Test
+    fun switchingFoldersWithIdenticalSettingsTimestampsRebuildsTasksAndSupportsOrdinaryNames() = runBlocking {
+        write("Tasks/desktop.md", taskText())
+        write("Phone settings/plugins/tasknotes/data.json", """{"tasksFolder":"Phone tasks"}""")
+        write("Phone tasks/mobile.md", taskText())
+        assertEquals(File(root, ".obsidian/plugins/tasknotes/data.json").lastModified(),
+            File(root, "Phone settings/plugins/tasknotes/data.json").lastModified())
+        assertTrue(scanner.scanVault(uri).succeeded)
+        assertEquals("desktop.md", database.taskDao().getAllTasks().single().fileName)
+        clock += hour
+        assertTrue(scanner.scanVault(uri, "Phone settings").succeeded)
+        assertEquals("mobile.md", database.taskDao().getAllTasks().single().fileName)
+        clock += hour
+        assertTrue(scanner.scanVault(uri).succeeded)
+        assertEquals("desktop.md", database.taskDao().getAllTasks().single().fileName)
+    }
+
+    @Test
+    fun missingOrUnreadableChosenConfigurationFailsWithoutFallingBack() = runBlocking {
+        write("Tasks/task.md", taskText())
+        assertTrue(scanner.scanVault(uri).succeeded)
+        val checkpoint = database.vaultScanStateDao().get(uri)!!.lastScannedAt
+        clock += hour
+        assertFalse(scanner.scanVault(uri, ".missing").succeeded)
+        assertEquals(checkpoint, database.vaultScanStateDao().get(uri)!!.lastScannedAt)
+        write("custom/plugins/tasknotes/data.json", """{"tasksFolder":"Tasks"}""")
+        provider.unreadable = "root/custom/plugins/tasknotes/data.json"
+        assertFalse(scanner.scanVault(uri, "custom").succeeded)
+        assertEquals(checkpoint, database.vaultScanStateDao().get(uri)!!.lastScannedAt)
+        assertEquals(1, database.taskDao().getAllTasks().size)
+    }
+
+    @Test
     fun firstSuccessfulScanCountsEvenWhenEmptyOrAllTasksAreOld() = runBlocking {
         val initial = scanner.scanVault(uri)
         assertTrue(database.vaultScanStateDao().get(uri)?.lastScanError, initial.succeeded)

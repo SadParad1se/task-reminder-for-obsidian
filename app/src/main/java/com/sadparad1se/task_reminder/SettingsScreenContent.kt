@@ -26,10 +26,12 @@ internal fun SettingsScreenContent(
     settings: AppSettings,
     selectedVaults: List<VaultSelection>,
     scanStates: List<VaultScanState>,
+    isScanning: Boolean,
     canScheduleExactAlarms: Boolean,
     hasNotificationPermission: Boolean,
     onAddVault: () -> Unit,
     onRemoveVault: (String) -> Unit,
+    onChooseConfigurationFolder: (String) -> Unit,
     onScanNow: () -> Unit,
     onScanFrequencySelected: (ScanFrequency) -> Unit,
     onScheduledDateTimeNotificationsChanged: (Boolean) -> Unit,
@@ -60,10 +62,11 @@ internal fun SettingsScreenContent(
             contentPadding = PaddingValues(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            vaultSection(selectedVaults, onRemoveVault)
+            vaultSection(selectedVaults, onRemoveVault, onChooseConfigurationFolder, enabled = !isScanning)
             item {
                 VaultActionRow(
                     scanEnabled = settings.vaultUris.isNotEmpty(),
+                    isScanning = isScanning,
                     onAddVault = onAddVault,
                     onScanNow = onScanNow
                 )
@@ -107,10 +110,12 @@ private fun SettingsScreenPreview() {
             settings = AppSettings(vaultUris = listOf("content://preview/vault")),
             selectedVaults = listOf(VaultSelection(Uri.parse("content://preview/vault"), "Preview Vault")),
             scanStates = emptyList(),
+            isScanning = false,
             canScheduleExactAlarms = true,
             hasNotificationPermission = true,
             onAddVault = {},
             onRemoveVault = {},
+            onChooseConfigurationFolder = {},
             onScanNow = {},
             onScanFrequencySelected = {},
             onScheduledDateTimeNotificationsChanged = {},

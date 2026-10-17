@@ -8,7 +8,6 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.work.await
 import kotlinx.coroutines.flow.Flow
@@ -18,7 +17,10 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.withLock
 import java.io.IOException
 
-private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(name = "settings")
+private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "settings",
+    produceMigrations = { listOf(VaultConfigurationMigration) }
+)
 
 /** Reads and writes persistent app settings from DataStore. */
 class SettingsRepository(
@@ -27,7 +29,7 @@ class SettingsRepository(
 ) {
 
     private object Keys {
-        val VAULT_URIS = stringSetPreferencesKey("vault_uris")
+        val VAULT_URIS = VaultPreferences.uris
         val SCAN_FREQUENCY = stringPreferencesKey("scan_frequency")
         val ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         val SCHEDULED_DATETIME_NOTIFICATIONS_ENABLED =
@@ -60,6 +62,7 @@ class SettingsRepository(
 
             AppSettings(
                 vaultUris = vaultUris,
+                vaultConfigurationFolders = VaultPreferences.folders(preferences),
                 scanFrequency = scanFrequency,
                 onboardingCompleted = preferences[Keys.ONBOARDING_COMPLETED] ?: false,
                 scheduledDateTimeNotificationsEnabled =
@@ -77,7 +80,10 @@ class SettingsRepository(
         }
 
     /** Adds a vault URI to the selected vault set. */
-    suspend fun addVaultUri(vaultUri: String) {
+    suspend fun addVaultUri(
+        vaultUri: String,
+        configurationFolder: String = DefaultObsidianConfigurationFolder
+    ) {
         TaskActivityMonitor.mutex.withLock {
             if (vaultUri !in settingsFlow.first().vaultUris) {
                 // Re-adding a vault establishes a new initial scan, even if old scan state remains.
@@ -85,9 +91,25 @@ class SettingsRepository(
             }
             dataStore.edit { preferences ->
                 preferences[Keys.VAULT_URIS] = preferences[Keys.VAULT_URIS].orEmpty() + vaultUri
+                preferences[VaultPreferences.configurationFolders] = VaultPreferences.encode(
+                    VaultPreferences.folders(preferences) + (vaultUri to configurationFolder)
+                )
             }
         }
         scheduleVaultScanWork()
+    }
+
+    /** Changes one selected vault's configuration, serialized with active scans. */
+    suspend fun updateVaultConfigurationFolder(vaultUri: String, configurationFolder: String) {
+        TaskActivityMonitor.mutex.withLock {
+            dataStore.edit { preferences ->
+                if (vaultUri in preferences[Keys.VAULT_URIS].orEmpty()) {
+                    preferences[VaultPreferences.configurationFolders] = VaultPreferences.encode(
+                        VaultPreferences.folders(preferences) + (vaultUri to configurationFolder)
+                    )
+                }
+            }
+        }
     }
 
     /** Removes a vault URI from the selected vault set. */
@@ -96,6 +118,9 @@ class SettingsRepository(
             dataStore.edit { preferences ->
                 val remaining = preferences[Keys.VAULT_URIS].orEmpty() - vaultUri
                 preferences[Keys.VAULT_URIS] = remaining
+                preferences[VaultPreferences.configurationFolders] = VaultPreferences.encode(
+                    VaultPreferences.folders(preferences) - vaultUri
+                )
                 if (remaining.isEmpty()) {
                     preferences.remove(Keys.LAST_TASK_ACTIVITY_SCAN_AT)
                     preferences.remove(Keys.LAST_STALE_TASK_UPDATE_NOTIFICATION_AT)

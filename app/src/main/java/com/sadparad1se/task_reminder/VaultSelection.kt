@@ -8,10 +8,11 @@ import androidx.documentfile.provider.DocumentFile
 /** Vault selected in settings, including both its persisted URI and human-readable name. */
 data class VaultSelection(
     val uri: Uri,
-    val displayName: String
+    val displayName: String,
+    val configurationFolder: String = DefaultObsidianConfigurationFolder
 )
 
-const val InvalidObsidianVaultMessage = "Selected folder is not an Obsidian vault. It must contain .obsidian."
+const val InvalidObsidianVaultMessage = "No configuration directories found in the selected vault."
 
 /** Creates the Android document-tree picker intent used to select an Obsidian vault. */
 fun createOpenVaultIntent(): Intent {
